@@ -12,14 +12,15 @@ import {
   LayoutDashboard,
   Building2,
   Users,
-  BarChart3
+  CalendarCheck
 } from "lucide-react";
+
 import { cn } from "@/lib/utils";
 import tiverLogo from "@/assets/tiver-logo.png";
 
 interface SuperAdminSidebarProps {
   currentView: string;
-  onViewChange: (view: "dashboard" | "workspaces" | "users" | "stats") => void;
+  onViewChange: (view: "dashboard" | "workspaces" | "users" | "subscriptions") => void;
 }
 
 const menuItems = [
@@ -42,11 +43,12 @@ const menuItems = [
     description: "Gestión de usuarios"
   },
   {
-    id: "stats",
-    label: "Estadísticas",
-    icon: BarChart3,
-    description: "Métricas del sistema"
+    id: "subscriptions",
+    label: "Suscripciones",
+    icon: CalendarCheck,
+    description: "Gestión de suscripciones"
   }
+  
 ];
 
 export const SuperAdminSidebar = ({ currentView, onViewChange }: SuperAdminSidebarProps) => {

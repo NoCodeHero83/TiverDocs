@@ -5,10 +5,11 @@ import { SuperAdminDashboard } from "@/components/superadmin/SuperAdminDashboard
 import { WorkspacesManager } from "@/components/superadmin/WorkspacesManager";
 import { UsersManager } from "@/components/superadmin/UsersManager";
 import { SystemStats } from "@/components/superadmin/SystemStats";
+import { SubscriptionsManager } from "@/components/superadmin/SubscriptionsManager";
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { useAuth } from "@/contexts/AuthContext";
 
-type SuperAdminView = "dashboard" | "workspaces" | "users" | "stats";
+type SuperAdminView = "dashboard" | "workspaces" | "users" | "stats" | "subscriptions";
 
 export const SuperAdminPage = () => {
   const { usuario, signOut } = useAuth();
@@ -25,6 +26,8 @@ export const SuperAdminPage = () => {
         return <WorkspacesManager />;
       case "users":
         return <UsersManager />;
+      case "subscriptions":
+        return <SubscriptionsManager />;
       case "stats":
         return <SystemStats />;
       default:

@@ -126,6 +126,8 @@ export const useDocuments = (workspaceId?: string) => {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['documents', workspaceId] });
+      // Invalidate document stats so KPIs/cards refresh in the dashboard
+      queryClient.invalidateQueries({ queryKey: ['documentStats', workspaceId] });
       toast({
         title: "Documento subido",
         description: "El documento se ha cargado correctamente.",
@@ -145,6 +147,7 @@ export const useDocuments = (workspaceId?: string) => {
       documentService.updateDocument(documentId, updates),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['documents', workspaceId] });
+      queryClient.invalidateQueries({ queryKey: ['documentStats', workspaceId] });
       toast({
         title: "Documento actualizado",
         description: "Los cambios se han guardado correctamente.",
@@ -164,6 +167,7 @@ export const useDocuments = (workspaceId?: string) => {
       documentService.deleteDocument(documentId, filePath),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['documents', workspaceId] });
+      queryClient.invalidateQueries({ queryKey: ['documentStats', workspaceId] });
       toast({
         title: "Documento eliminado",
         description: "El documento se ha eliminado correctamente.",

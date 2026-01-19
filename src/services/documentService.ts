@@ -179,25 +179,58 @@ export const documentService = {
 
     if (error) throw error;
 
-    const stats = {
-      totalDocuments: data.length,
-      activeDocuments: data.filter(d => d.estado === 'Activo').length,
-      inactiveDocuments: data.filter(d => d.estado === 'Inactivo').length,
-      expiredDocuments: data.filter(d => d.estado === 'Vencido').length,
-      expiringDocuments: 0,
-      totalValue: data.reduce((sum, d) => sum + (d.valor_titulo || 0), 0),
-    };
-
+    // Derive document status from fecha_vencimiento when applicable so KPIs reflect expiration dates
     const today = new Date();
     const thirtyDaysFromNow = new Date();
     thirtyDaysFromNow.setDate(today.getDate() + 30);
 
-    stats.expiringDocuments = data.filter(d => {
-      if (!d.fecha_vencimiento) return false;
-      const vencimiento = new Date(d.fecha_vencimiento);
-      return vencimiento >= today && vencimiento <= thirtyDaysFromNow;
-    }).length;
+    let totalValue = 0;
+    let totalDocuments = 0;
+    let activeDocuments = 0;
+    let inactiveDocuments = 0;
+    let expiredDocuments = 0;
+    let expiringDocuments = 0;
 
-    return stats;
+    for (const d of data) {
+      totalDocuments += 1;
+      totalValue += (d.valor_titulo || 0);
+
+      // Determine expiration-based status
+      let isExpired = false;
+      let isExpiring = false;
+
+      if (d.fecha_vencimiento) {
+        const vencimiento = new Date(d.fecha_vencimiento);
+        if (vencimiento < today) {
+          isExpired = true;
+        } else if (vencimiento <= thirtyDaysFromNow) {
+          isExpiring = true;
+        }
+      }
+
+      if (isExpired) {
+        expiredDocuments += 1;
+      } else if (isExpiring) {
+        expiringDocuments += 1;
+      }
+
+      // Count active/inactive considering expiration
+      if (!isExpired && d.estado === 'Activo') {
+        activeDocuments += 1;
+      }
+
+      if (d.estado === 'Inactivo') {
+        inactiveDocuments += 1;
+      }
+    }
+
+    return {
+      totalDocuments,
+      activeDocuments,
+      inactiveDocuments,
+      expiredDocuments,
+      expiringDocuments,
+      totalValue,
+    };
   }
 };
