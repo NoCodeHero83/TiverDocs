@@ -170,18 +170,35 @@ export const documentService = {
   },
 
   async downloadDocument(filePath: string): Promise<Blob> {
+    // Try to resolve the human-friendly document name from the DB
+    let friendlyName = filePath;
+    try {
+      const { data: docData, error: docErr } = await supabase
+        .from('documentos')
+        .select('id, file_name')
+        .eq('file_path', filePath)
+        .limit(1)
+        .single();
+
+      if (!docErr && docData && docData.file_name) {
+        friendlyName = docData.file_name;
+      }
+    } catch (e) {
+      // ignore lookup errors and fall back to filePath
+    }
+
     const { data, error } = await supabase.storage
       .from('documents')
       .download(filePath);
 
     if (error) throw error;
 
-    // Log download action
+    // Log download action using friendly name when available
     try {
       await logActivity({
         accion: 'Documento descargado',
         entidad_tipo: 'documento',
-        entidad_nombre: filePath,
+        entidad_nombre: friendlyName,
         entidad_id: null
       } as any);
     } catch (e) {
@@ -216,6 +233,23 @@ export const documentService = {
   },
 
   async deleteDocument(documentId: string, filePath: string): Promise<void> {
+    // Resolve document name for logging
+    let friendlyName = filePath;
+    try {
+      const { data: docData, error: docErr } = await supabase
+        .from('documentos')
+        .select('file_name')
+        .eq('id', documentId)
+        .limit(1)
+        .single();
+
+      if (!docErr && docData && docData.file_name) {
+        friendlyName = docData.file_name;
+      }
+    } catch (e) {
+      // ignore and fallback to filePath
+    }
+
     const { error: storageError } = await supabase.storage
       .from('documents')
       .remove([filePath]);
@@ -229,12 +263,12 @@ export const documentService = {
 
     if (dbError) throw dbError;
 
-    // Log document deletion
+    // Log document deletion using friendly name when available
     try {
       await logActivity({
         accion: 'Documento eliminado',
         entidad_tipo: 'documento',
-        entidad_nombre: filePath,
+        entidad_nombre: friendlyName,
         entidad_id: documentId
       } as any);
     } catch (e) {

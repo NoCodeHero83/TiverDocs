@@ -357,20 +357,22 @@ export const DocumentsTable = ({ userRole = "admin", workspaceId }: DocumentsTab
         return;
       }
 
-      // proceed to delete document
-      // Log that the document was downloaded (OTP confirmed) before deletion
+      // proceed to download first, then delete the document
       try {
-        await logActivity({
-          accion: 'Documento descargado (OTP confirmado)',
-          entidad_tipo: 'documento',
-          entidad_nombre: deleteTarget.file_name || deleteTarget.file_path,
-          entidad_id: deleteTarget.id
-        } as any);
+        await downloadDocument(deleteTarget.file_path, deleteTarget.file_name);
       } catch (e) {
-        console.error('[DocumentsTable] logActivity download-before-delete error', e);
+        console.error('[DocumentsTable] download after OTP failed', e);
+        setDeleteStep('otp');
+        return;
       }
 
-      await deleteDocument({ documentId: deleteTarget.id, filePath: deleteTarget.file_path });
+      try {
+        await deleteDocument({ documentId: deleteTarget.id, filePath: deleteTarget.file_path });
+      } catch (e) {
+        console.error('[DocumentsTable] delete after download failed', e);
+        // even if delete fails, we proceed to close modal so user isn't blocked
+      }
+
       setShowDeleteModal(false);
       setDeleteTarget(null);
     } catch (err) {
@@ -806,19 +808,19 @@ export const DocumentsTable = ({ userRole = "admin", workspaceId }: DocumentsTab
       <Dialog open={showDeleteModal} onOpenChange={setShowDeleteModal}>
         <DialogContent className="max-w-lg">
           <DialogHeader>
-            <DialogTitle>Confirmar eliminación</DialogTitle>
+            <DialogTitle>Confirmar descarga</DialogTitle>
             <DialogDescription>
-              Este documento será eliminado de la base de datos porque está siendo retirado.
+              Se descargará el documento y luego será eliminado. Se enviará un código OTP a tu correo para validar la descarga.
             </DialogDescription>
           </DialogHeader>
 
           <div className="space-y-4">
             {deleteStep === 'confirm' && (
               <div>
-                <p className="text-sm text-muted-foreground">¿Estás seguro que quieres continuar? Al confirmar se enviará un código OTP a tu correo para validar la eliminación.</p>
+                <p className="text-sm text-muted-foreground">¿Deseas descargar este documento ahora? Al confirmar se enviará un código OTP a tu correo para validar la descarga.</p>
                 <div className="flex justify-end gap-2 mt-4">
                   <Button variant="outline" onClick={() => setShowDeleteModal(false)}>Cancelar</Button>
-                  <Button onClick={handleSendOtp}>Confirmar y Enviar código</Button>
+                  <Button onClick={handleSendOtp}>Confirmar y Enviar código para descargar</Button>
                 </div>
               </div>
             )}
@@ -837,7 +839,7 @@ export const DocumentsTable = ({ userRole = "admin", workspaceId }: DocumentsTab
                 </div>
                 <div className="flex justify-end gap-2 mt-4">
                   <Button variant="outline" onClick={() => { setShowDeleteModal(false); setDeleteStep('confirm'); }}>Cancelar</Button>
-                  <Button onClick={handleVerifyOtpAndDelete}>Verificar y Eliminar</Button>
+                  <Button onClick={handleVerifyOtpAndDelete}>Verificar, Descargar y Eliminar</Button>
                 </div>
               </div>
             )}
