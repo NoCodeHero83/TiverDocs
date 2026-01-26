@@ -21,6 +21,7 @@ interface AdvancedFiltersModalProps {
   currentFilters: FilterValue[];
   selectedDocumentType?: string;
   customAttributes?: any[];
+  workspaceId?: string;
 }
 
 export const AdvancedFiltersModal = ({
@@ -30,7 +31,8 @@ export const AdvancedFiltersModal = ({
   availableFilters,
   currentFilters,
   selectedDocumentType,
-  customAttributes = []
+  customAttributes = [],
+  workspaceId
 }: AdvancedFiltersModalProps) => {
   const [selectedFilters, setSelectedFilters] = useState<FilterValue[]>(currentFilters);
 
@@ -262,9 +264,14 @@ export const AdvancedFiltersModal = ({
               <TabsList className={`grid w-full ${customAttributes && customAttributes.length > 0 ? 'grid-cols-3' : 'grid-cols-2'}`}>
                 <TabsTrigger value="fijos">Campos Fijos</TabsTrigger>
                 <TabsTrigger value="variables">Campos Variables</TabsTrigger>
-                {customAttributes && customAttributes.length > 0 && (
-                  <TabsTrigger value="personalizados">Campos Personalizados</TabsTrigger>
-                )}
+                {(() => {
+                  const visibleCustom = workspaceId
+                    ? customAttributes.filter(a => a.workspaceId === workspaceId)
+                    : customAttributes.filter(a => !a.workspaceId);
+                  return visibleCustom && visibleCustom.length > 0 ? (
+                    <TabsTrigger value="personalizados">Campos Personalizados</TabsTrigger>
+                  ) : null;
+                })()}
               </TabsList>
               
               <TabsContent value="fijos" className="mt-4">
@@ -321,8 +328,12 @@ export const AdvancedFiltersModal = ({
                 </div>
               </TabsContent>
 
-              {customAttributes && customAttributes.length > 0 && (
-                <TabsContent value="personalizados" className="mt-4">
+              {(() => {
+                const visibleCustom = workspaceId
+                  ? customAttributes.filter(a => a.workspaceId === workspaceId)
+                  : customAttributes.filter(a => !a.workspaceId);
+                return visibleCustom && visibleCustom.length > 0 ? (
+                  <TabsContent value="personalizados" className="mt-4">
                   <div className="mb-2">
                     <p className="text-xs text-muted-foreground">
                       {selectedDocumentType 
@@ -331,10 +342,10 @@ export const AdvancedFiltersModal = ({
                     </p>
                   </div>
                   <div className="grid grid-cols-2 gap-2">
-                    {customAttributes
+                    {visibleCustom
                       .filter(attr => !selectedDocumentType || attr.documentTypes.includes(selectedDocumentType))
                       .length > 0 ? (
-                      customAttributes
+                      visibleCustom
                         .filter(attr => !selectedDocumentType || attr.documentTypes.includes(selectedDocumentType))
                         .map((attr) => (
                           <Button
@@ -363,7 +374,8 @@ export const AdvancedFiltersModal = ({
                     )}
                   </div>
                 </TabsContent>
-              )}
+                ) : null;
+              })()}
             </Tabs>
           </div>
 

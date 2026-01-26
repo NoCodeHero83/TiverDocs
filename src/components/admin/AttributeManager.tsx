@@ -24,11 +24,12 @@ interface AttributeManagerProps {
   isOpen: boolean;
   onClose: () => void;
   onSave: (attributes: CustomAttribute[]) => void;
+  workspaceId?: string;
 }
 
-export const AttributeManager = ({ isOpen, onClose, onSave }: AttributeManagerProps) => {
+export const AttributeManager = ({ isOpen, onClose, onSave, workspaceId }: AttributeManagerProps) => {
   const { toast } = useToast();
-  const { attributes, saveAttributes } = useCustomAttributes();
+  const { attributes, createAttribute, updateAttribute, deleteAttribute } = useCustomAttributes(workspaceId);
   const [newAttribute, setNewAttribute] = useState<Partial<CustomAttribute>>({
     name: "",
     label: "",
@@ -44,7 +45,8 @@ export const AttributeManager = ({ isOpen, onClose, onSave }: AttributeManagerPr
   const documentTypeOptions = ["Pagaré", "Solicitud de crédito", "Consentimiento informado"];
 
   const handleSave = () => {
-    onSave(attributes);
+    const visible = workspaceId ? attributes.filter(a => a.workspaceId === workspaceId) : attributes.filter(a => !a.workspaceId);
+    onSave(visible);
     toast({
       title: "Atributos guardados",
       description: "Los campos personalizados han sido guardados correctamente.",
@@ -62,44 +64,47 @@ export const AttributeManager = ({ isOpen, onClose, onSave }: AttributeManagerPr
       return;
     }
 
-    const attribute: CustomAttribute = {
-      id: Date.now().toString(),
-      name: newAttribute.name || "",
-      label: newAttribute.label || "",
-      type: newAttribute.type || "text",
-      documentTypes: newAttribute.documentTypes || [],
-      options: newAttribute.options || [],
-      required: newAttribute.required || false
-    };
+    (async () => {
+      try {
+        await createAttribute({
+          name: newAttribute.name || "",
+          label: newAttribute.label || "",
+          type: newAttribute.type || "text",
+          documentTypes: newAttribute.documentTypes || [],
+          options: newAttribute.options || [],
+          required: newAttribute.required || false
+        }, workspaceId);
 
-    const updatedAttributes = [...attributes, attribute];
-    saveAttributes(updatedAttributes);
-    
-    toast({
-      title: "Atributo agregado",
-      description: `Campo "${attribute.label}" agregado correctamente.`,
-    });
-    
-    setNewAttribute({
-      name: "",
-      label: "",
-      type: "text",
-      documentTypes: [],
-      options: [],
-      required: false
-    });
-    setIsCreating(false);
-    setOptionInput("");
+        toast({
+          title: "Atributo agregado",
+          description: `Campo "${newAttribute.label}" agregado correctamente.`,
+        });
+
+        setNewAttribute({
+          name: "",
+          label: "",
+          type: "text",
+          documentTypes: [],
+          options: [],
+          required: false
+        });
+        setIsCreating(false);
+        setOptionInput("");
+      } catch (e) {
+        toast({ title: 'Error', description: 'No se pudo crear el atributo', variant: 'destructive' });
+      }
+    })();
   };
 
   const removeAttribute = (id: string) => {
-    const updatedAttributes = attributes.filter(attr => attr.id !== id);
-    saveAttributes(updatedAttributes);
-    
-    toast({
-      title: "Atributo eliminado",
-      description: "El campo personalizado ha sido eliminado.",
-    });
+    (async () => {
+      try {
+        await deleteAttribute(id);
+        toast({ title: "Atributo eliminado", description: "El campo personalizado ha sido eliminado." });
+      } catch (e) {
+        toast({ title: 'Error', description: 'No se pudo eliminar el atributo', variant: 'destructive' });
+      }
+    })();
   };
 
   const addOption = () => {
@@ -162,12 +167,23 @@ export const AttributeManager = ({ isOpen, onClose, onSave }: AttributeManagerPr
             </div>
 
             <div className="space-y-3">
-              {attributes.map((attr) => (
+              {(
+                workspaceId
+                  ? attributes.filter(a => a.workspaceId === workspaceId)
+                  : attributes.filter(a => !a.workspaceId)
+              ).map((attr) => (
                 <Card key={attr.id} className="shadow-card border-0 bg-gradient-card">
                   <CardHeader className="pb-2">
                     <div className="flex items-start justify-between">
                       <div>
-                        <CardTitle className="text-sm font-medium">{attr.label}</CardTitle>
+                        <div className="flex items-center gap-2">
+                          <CardTitle className="text-sm font-medium">{attr.label}</CardTitle>
+                          {attr.workspaceId ? (
+                            <Badge variant="secondary" className="text-xs">Workspace</Badge>
+                          ) : (
+                            <Badge variant="outline" className="text-xs">Global</Badge>
+                          )}
+                        </div>
                         <p className="text-xs text-muted-foreground">Campo: {attr.name}</p>
                       </div>
                       <Button
@@ -209,7 +225,11 @@ export const AttributeManager = ({ isOpen, onClose, onSave }: AttributeManagerPr
                 </Card>
               ))}
 
-              {attributes.length === 0 && (
+              {(
+                workspaceId
+                  ? attributes.filter(a => a.workspaceId === workspaceId).length === 0
+                  : attributes.filter(a => !a.workspaceId).length === 0
+              ) && (
                 <div className="text-center text-muted-foreground text-sm py-8">
                   No hay atributos configurados. Agrega el primero.
                 </div>

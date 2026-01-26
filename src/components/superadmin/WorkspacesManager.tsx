@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useRef } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -41,13 +41,12 @@ export const WorkspacesManager = () => {
 
   const [searchTerm, setSearchTerm] = useState("");
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
+  const lastClosedRef = useRef<number | null>(null);
   const [newWorkspace, setNewWorkspace] = useState({
     name: "",
     description: "",
   });
-  const [inviteEmail, setInviteEmail] = useState("");
-  const [invitedEmails, setInvitedEmails] = useState<string[]>([]);
-  const [showSuggestions, setShowSuggestions] = useState(false);
+  
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [editingWorkspace, setEditingWorkspace] = useState({
     id: "",
@@ -68,64 +67,19 @@ export const WorkspacesManager = () => {
     }
 
     try {
+      // close modal immediately to avoid it re-opening during the list refresh
+      lastClosedRef.current = Date.now();
+      setIsCreateDialogOpen(false);
+
       const created = await createWorkspace({
         name: newWorkspace.name,
         description: newWorkspace.description || undefined
       });
 
-      // Crear solicitudes de registro (invitaciones) para cada email añadido
-      if (invitedEmails.length > 0) {
-        for (const email of invitedEmails) {
-          try {
-            // Buscar usuario existente por correo
-            const { data: userData, error: userErr } = await supabase
-              .from('usuarios')
-              .select('id')
-              .eq('email', email)
-              .single();
-
-            if (userErr) {
-              console.error('Error looking up user for invite:', email, userErr);
-            }
-
-            if (userData && userData.id) {
-              // Insertar asignación en user_workspaces con rol 'Cliente' y estado 'Invitado'
-              try {
-                await supabase.from('user_workspaces').insert({
-                  user_id: userData.id,
-                  workspace_id: created.id,
-                  rol: 'Cliente',
-                  estado: 'Invitado',
-                  invited_at: new Date().toISOString(),
-                  invited_by: auth.user?.id || null
-                });
-              } catch (err) {
-                console.error('Error inserting user_workspaces for', email, err);
-              }
-            } else {
-              // Si no existe usuario, crear registro de invitación
-              try {
-                await createRegisterRequest({
-                  company_name: created.name,
-                  contact_name: '',
-                  email,
-                  message: `Invitación al workspace ${created.name} (rol: Cliente)`
-                });
-              } catch (err) {
-                console.error('Error creating invite request for', email, err);
-              }
-            }
-          } catch (err) {
-            console.error('Unexpected error processing invite for', email, err);
-          }
-        }
-      }
-
       setNewWorkspace({ name: "", description: "" });
-      setInvitedEmails([]);
-      setInviteEmail("");
-      setIsCreateDialogOpen(false);
     } catch (error) {
+      // if creation fails, re-open the modal so the user can retry
+      setIsCreateDialogOpen(true);
       console.error('Error creating workspace:', error);
     }
   };
@@ -285,7 +239,10 @@ export const WorkspacesManager = () => {
                 Administra las empresas cliente y sus configuraciones
               </CardDescription>
             </div>
-            <Button onClick={() => setIsCreateDialogOpen(true)} className="gap-2">
+            <Button onClick={() => {
+              const last = lastClosedRef.current || 0;
+              if (Date.now() - last > 600) setIsCreateDialogOpen(true);
+            }} className="gap-2">
               <Plus className="h-4 w-4" />
               Nuevo Workspace
             </Button>
@@ -399,7 +356,7 @@ export const WorkspacesManager = () => {
         </CardContent>
       </Card>
 
-      <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
+      <Dialog open={isCreateDialogOpen} onOpenChange={(open) => typeof open === 'boolean' && setIsCreateDialogOpen(open)}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Crear Nuevo Workspace</DialogTitle>
@@ -430,77 +387,7 @@ export const WorkspacesManager = () => {
                 placeholder="Descripción de la empresa..."
               />
             </div>
-            <div>
-              <Label htmlFor="invite">Cliente</Label>
-              <div className="flex gap-2">
-                <div className="relative w-full">
-                  <Input
-                    id="invite"
-                    value={inviteEmail}
-                    onChange={(e) => {
-                      setInviteEmail(e.target.value);
-                      setShowSuggestions(true);
-                    }}
-                    onFocus={() => setShowSuggestions(true)}
-                    onBlur={() => setTimeout(() => setShowSuggestions(false), 150)}
-                    placeholder="correo@cliente.com"
-                  />
-
-                  {/* Suggestions dropdown */}
-                  {showSuggestions && inviteEmail.trim().length > 0 && (
-                    <div className="absolute z-20 left-0 right-0 bg-popover border rounded shadow mt-1 max-h-40 overflow-auto">
-                      {(users || [])
-                        .filter(u =>
-                          u.email.toLowerCase().includes(inviteEmail.toLowerCase()) ||
-                          u.full_name.toLowerCase().includes(inviteEmail.toLowerCase())
-                        )
-                        .slice(0, 8)
-                        .map(u => (
-                          <div
-                            key={u.id}
-                            className="px-3 py-2 hover:bg-accent/50 cursor-pointer flex items-center justify-between"
-                            onMouseDown={() => {
-                              const email = u.email;
-                              if (!invitedEmails.includes(email)) {
-                                setInvitedEmails([...invitedEmails, email]);
-                              }
-                              setInviteEmail("");
-                              setShowSuggestions(false);
-                            }}
-                          >
-                            <div>
-                              <div className="text-sm font-medium">{u.full_name}</div>
-                              <div className="text-xs text-muted-foreground">{u.email}</div>
-                            </div>
-                            <div className="text-xs text-muted-foreground">Usuario</div>
-                          </div>
-                        ))}
-                    </div>
-                  )}
-                </div>
-                <Button onClick={() => {
-                  const email = inviteEmail.trim();
-                  if (email && !invitedEmails.includes(email)) {
-                    setInvitedEmails([...invitedEmails, email]);
-                    setInviteEmail("");
-                  }
-                }}>Agregar</Button>
-              </div>
-
-              {invitedEmails.length > 0 && (
-                <div className="mt-2">
-                  {invitedEmails.map((e) => (
-                    <div key={e} className="flex items-center justify-between bg-muted p-2 rounded mb-1">
-                      <div className="flex items-center gap-3">
-                        <div className="text-sm">{e}</div>
-                        <Badge variant="secondary">Cliente</Badge>
-                      </div>
-                      <Button variant="ghost" size="sm" onClick={() => setInvitedEmails(invitedEmails.filter(x => x !== e))}>Quitar</Button>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
+            {/* Invitations removed — workspace creation simplified */}
           </div>
 
           <DialogFooter>

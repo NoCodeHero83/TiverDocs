@@ -1,4 +1,5 @@
 import { supabase } from "@/lib/supabase";
+import { logActivity } from "@/services/activityService";
 
 export interface DocumentData {
   workspace_id: string;
@@ -85,6 +86,18 @@ export const documentService = {
 
     if (error) throw error;
 
+    // Log document creation
+    try {
+      await logActivity({
+        accion: 'Documento creado',
+        entidad_tipo: 'documento',
+        entidad_nombre: documentData.file_name,
+        entidad_id: data.id
+      });
+    } catch (e) {
+      console.error('[documentService] logActivity error', e);
+    }
+
     return data;
   },
 
@@ -122,12 +135,58 @@ export const documentService = {
     return data || [];
   },
 
+  async getDocumentsByWorkspacePaged(workspaceId: string, start: number, end: number): Promise<{ data: any[]; error: any }>
+  {
+    const { data, error } = await supabase
+      .from('documentos')
+      .select(`
+        *,
+        valores_atributos (
+          id,
+          atributo_id,
+          valor,
+          atributos_personalizados (
+            id,
+            nombre,
+            tipo
+          )
+        )
+      `)
+      .eq('workspace_id', workspaceId)
+      .order('created_at', { ascending: false })
+      .range(start, end);
+
+    return { data: data || [], error };
+  },
+
+  async getDocumentsCount(workspaceId: string): Promise<number> {
+    const { count, error } = await supabase
+      .from('documentos')
+      .select('id', { count: 'exact', head: true })
+      .eq('workspace_id', workspaceId);
+
+    if (error) throw error;
+    return count || 0;
+  },
+
   async downloadDocument(filePath: string): Promise<Blob> {
     const { data, error } = await supabase.storage
       .from('documents')
       .download(filePath);
 
     if (error) throw error;
+
+    // Log download action
+    try {
+      await logActivity({
+        accion: 'Documento descargado',
+        entidad_tipo: 'documento',
+        entidad_nombre: filePath,
+        entidad_id: null
+      } as any);
+    } catch (e) {
+      console.error('[documentService] logActivity download error', e);
+    }
 
     return data;
   },
@@ -169,6 +228,18 @@ export const documentService = {
       .eq('id', documentId);
 
     if (dbError) throw dbError;
+
+    // Log document deletion
+    try {
+      await logActivity({
+        accion: 'Documento eliminado',
+        entidad_tipo: 'documento',
+        entidad_nombre: filePath,
+        entidad_id: documentId
+      } as any);
+    } catch (e) {
+      console.error('[documentService] logActivity delete error', e);
+    }
   },
 
   async getDocumentStats(workspaceId: string): Promise<any> {

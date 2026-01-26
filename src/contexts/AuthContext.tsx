@@ -7,6 +7,7 @@ import {
 } from "react";
 import { supabase } from "@/lib/supabase";
 import { User, Session } from "@supabase/supabase-js";
+import { logActivity } from '@/services/activityService';
 
 interface Usuario {
   id: string;
@@ -126,6 +127,16 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       setSession(data.session);
 
       await updateLastAccess();
+      try {
+        await logActivity({
+          accion: 'Inicio de sesión',
+          entidad_tipo: 'usuario',
+          entidad_nombre: usuarioData?.full_name || data.user.email || null,
+          entidad_id: data.user.id
+        });
+      } catch (e) {
+        console.error('[AuthContext] logActivity signIn error', e);
+      }
     }
   };
 

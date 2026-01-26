@@ -1,4 +1,5 @@
 import { useState } from "react";
+import PdfViewerNoDownload from "@/components/PdfViewerNoDownload";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -31,7 +32,11 @@ import {
   Upload,
   Eye,
   Loader2,
-  Trash2
+  Trash2,
+  ChevronLeft,
+  ChevronRight,
+  ChevronsLeft,
+  ChevronsRight
 } from "lucide-react";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
@@ -46,6 +51,7 @@ import { CustomAttribute } from "@/hooks/useCustomAttributes";
 import { useDocuments, DocumentWithAttributes } from "@/hooks/useDocuments";
 import { useAuth } from "@/contexts/AuthContext";
 import { DocumentData } from "@/services/documentService";
+import { logActivity } from '@/services/activityService';
 
 interface DocumentsTableProps {
   userRole?: "admin" | "viewer";
@@ -54,15 +60,19 @@ interface DocumentsTableProps {
 
 export const DocumentsTable = ({ userRole = "admin", workspaceId }: DocumentsTableProps) => {
   const { usuario } = useAuth();
+  const [page, setPage] = useState(1);
+  const pageSize = 10;
+
   const {
-    documents,
+    documents: pagedDocuments,
     isLoading,
     uploadDocument,
     isUploading,
     downloadDocument,
     deleteDocument,
-    isDeleting
-  } = useDocuments(workspaceId);
+    isDeleting,
+    total
+  } = useDocuments(workspaceId, page, pageSize);
 
   const [searchTerm, setSearchTerm] = useState("");
   const [documentTypeFilter, setDocumentTypeFilter] = useState("all");
@@ -73,8 +83,14 @@ export const DocumentsTable = ({ userRole = "admin", workspaceId }: DocumentsTab
   const [isAttributeManagerOpen, setIsAttributeManagerOpen] = useState(false);
   const [showDetailsModal, setShowDetailsModal] = useState(false);
   const [selectedDocument, setSelectedDocument] = useState<DocumentWithAttributes | null>(null);
+  const [showPdfViewer, setShowPdfViewer] = useState(false);
+  const [pdfPathToView, setPdfPathToView] = useState<string | null>(null);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<DocumentWithAttributes | null>(null);
+  const [deleteStep, setDeleteStep] = useState<'confirm' | 'otp' | 'loading'>('confirm');
+  const [otpCode, setOtpCode] = useState("");
 
-  const { attributes, saveDocumentAttributes, getDocumentAttributes } = useCustomAttributes();
+  const { attributes, saveDocumentAttributes, getDocumentAttributes } = useCustomAttributes(workspaceId);
 
   const getSelectedDocumentTypeForFilters = () => {
     switch (documentTypeFilter) {
@@ -209,7 +225,7 @@ export const DocumentsTable = ({ userRole = "admin", workspaceId }: DocumentsTab
     });
   };
 
-  const filteredDocuments = documents.filter(doc => {
+  const filteredDocuments = pagedDocuments.filter(doc => {
     const matchesSearch =
       doc.nombre_deudor?.toLowerCase().includes(searchTerm.toLowerCase()) ||
       doc.id_deudor?.includes(searchTerm) ||
@@ -226,12 +242,22 @@ export const DocumentsTable = ({ userRole = "admin", workspaceId }: DocumentsTab
   });
 
   const handleDownload = async (document: DocumentWithAttributes) => {
-    await downloadDocument(document.file_path, document.file_name);
+    // Open confirmation modal instead of immediate download
+    setDeleteTarget(document);
+    setDeleteStep('confirm');
+    setOtpCode("");
+    setShowDeleteModal(true);
   };
 
   const handleViewDetails = (document: DocumentWithAttributes) => {
     setSelectedDocument(document);
     setShowDetailsModal(true);
+  };
+
+  const handleViewPdf = (document: DocumentWithAttributes) => {
+    console.log("[DocumentsTable] open pdf viewer", { id: document.id, path: document.file_path });
+    setPdfPathToView(document.file_path);
+    setShowPdfViewer(true);
   };
 
   const handleUpload = () => {
@@ -259,6 +285,99 @@ export const DocumentsTable = ({ userRole = "admin", workspaceId }: DocumentsTab
   const handleDelete = (document: DocumentWithAttributes) => {
     if (confirm('¿Estás seguro de eliminar este documento?')) {
       deleteDocument({ documentId: document.id, filePath: document.file_path });
+    }
+  };
+
+  const handleSendOtp = async () => {
+    if (!deleteTarget) return;
+    setDeleteStep('loading');
+    try {
+      const functionsBase = import.meta.env.VITE_SUPABASE_FUNCTIONS_URL || `${import.meta.env.VITE_SUPABASE_URL}/functions/v1`;
+      const { data: session } = await (await import('@/lib/supabase')).supabase.auth.getSession();
+      const token = session?.session?.access_token;
+      const res = await fetch(`${functionsBase}/send-otp`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: deleteTarget.email || undefined, documentId: deleteTarget.id })
+      });
+      const json = await res.json();
+      if (!res.ok) {
+        console.error('[DocumentsTable] send-otp error', json);
+        setDeleteStep('confirm');
+        return;
+      }
+      console.log('[DocumentsTable] send-otp response', json);
+      setDeleteStep('otp');
+    } catch (err) {
+      console.error('[DocumentsTable] send-otp exception', err);
+      setDeleteStep('confirm');
+    }
+  };
+
+  const handleVerifyOtpAndDelete = async () => {
+    if (!deleteTarget) return;
+    setDeleteStep('loading');
+    try {
+      // Validate OTP client-side by querying `otp_codes` table and deleting the row if valid
+      const { supabase } = await import('@/lib/supabase');
+      console.log('[DocumentsTable] verifying otp client-side', { code: otpCode, documentId: deleteTarget.id });
+
+      const { data: rows, error } = await supabase
+        .from('otp_codes')
+        .select('*')
+        .eq('code', otpCode)
+        .eq('document_id', deleteTarget.id)
+        .order('created_at', { ascending: false })
+        .limit(1);
+
+      if (error) {
+        console.error('[DocumentsTable] otp query error', error);
+        setDeleteStep('otp');
+        return;
+      }
+
+      const row = (rows && rows[0]) || null;
+      if (!row) {
+        console.error('[DocumentsTable] otp not found');
+        setDeleteStep('otp');
+        return;
+      }
+
+      if (row.expires_at && new Date(row.expires_at) < new Date()) {
+        console.error('[DocumentsTable] otp expired', { expires_at: row.expires_at });
+        setDeleteStep('otp');
+        return;
+      }
+
+      // consume OTP (delete)
+      const { error: delErr } = await supabase.from('otp_codes').delete().eq('id', row.id);
+      if (delErr) {
+        console.error('[DocumentsTable] failed to consume otp', delErr);
+        setDeleteStep('otp');
+        return;
+      }
+
+      // proceed to delete document
+      // Log that the document was downloaded (OTP confirmed) before deletion
+      try {
+        await logActivity({
+          accion: 'Documento descargado (OTP confirmado)',
+          entidad_tipo: 'documento',
+          entidad_nombre: deleteTarget.file_name || deleteTarget.file_path,
+          entidad_id: deleteTarget.id
+        } as any);
+      } catch (e) {
+        console.error('[DocumentsTable] logActivity download-before-delete error', e);
+      }
+
+      await deleteDocument({ documentId: deleteTarget.id, filePath: deleteTarget.file_path });
+      setShowDeleteModal(false);
+      setDeleteTarget(null);
+    } catch (err) {
+      console.error('Error verifying OTP or deleting document:', err);
+      setDeleteStep('otp');
+    } finally {
+      setOtpCode("");
     }
   };
 
@@ -327,7 +446,7 @@ export const DocumentsTable = ({ userRole = "admin", workspaceId }: DocumentsTab
               {advancedFilters.length > 0 && (
                 <Badge
                   variant="destructive"
-                  className="absolute -top-2 -right-2 h-5 w-5 p-0 text-xs"
+                  className="absolute top-0 right-0 translate-x-1/2 -translate-y-1/2 pointer-events-none h-5 w-5 p-0 text-[10px] flex items-center justify-center"
                 >
                   {advancedFilters.length}
                 </Badge>
@@ -366,13 +485,14 @@ export const DocumentsTable = ({ userRole = "admin", workspaceId }: DocumentsTab
         currentFilters={advancedFilters}
         selectedDocumentType={selectedDocumentTypeForFilters}
         customAttributes={attributes}
+        workspaceId={workspaceId}
       />
 
       <Card className="shadow-card border-0 bg-gradient-card">
         <CardHeader>
           <div className="flex items-center justify-between">
             <CardTitle>
-              Documentos ({filteredDocuments.length})
+              Documentos ({total})
             </CardTitle>
             {userRole === "admin" && (
               <Button onClick={handleUpload} className="bg-gradient-primary" disabled={isUploading}>
@@ -449,12 +569,24 @@ export const DocumentsTable = ({ userRole = "admin", workspaceId }: DocumentsTab
                             </Button>
                             <Button
                               size="sm"
-                              variant="outline"
-                              onClick={() => handleDownload(doc)}
-                              className="bg-background/50 hover:bg-primary hover:text-primary-foreground"
+                              variant="ghost"
+                              onClick={() => handleViewPdf(doc)}
+                              className="text-primary p-2"
+                              aria-label="Ver PDF"
+                              title="Ver PDF"
                             >
-                              <Download className="w-4 h-4" />
+                              <FileText className="w-4 h-4" />
                             </Button>
+                            {userRole !== "viewer" && (
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => handleDownload(doc)}
+                                className="bg-background/50 hover:bg-primary hover:text-primary-foreground"
+                              >
+                                <Download className="w-4 h-4" />
+                              </Button>
+                            )}
                             {userRole === "admin" && (
                               <Button
                                 size="sm"
@@ -476,6 +608,68 @@ export const DocumentsTable = ({ userRole = "admin", workspaceId }: DocumentsTab
             </Table>
           </div>
         </CardContent>
+        <div className="flex items-center justify-between px-6 py-3">
+          <div className="text-sm text-muted-foreground">Mostrando página {page} de {Math.max(1, Math.ceil(total / pageSize))}</div>
+          <div className="flex items-center gap-2">
+            {/* Primera / Anterior */}
+            <Button size="sm" variant="ghost" className="h-8 w-8 rounded-full" onClick={() => setPage(1)} disabled={page === 1}>
+              <ChevronsLeft className="w-4 h-4" />
+            </Button>
+            <Button size="sm" variant="ghost" className="h-8 w-8 rounded-full" onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page === 1}>
+              <ChevronLeft className="w-4 h-4" />
+            </Button>
+
+            {/* Page numbers with ellipsis */}
+            {(() => {
+              const totalPages = Math.max(1, Math.ceil(total / pageSize));
+              const pages: (number | '...')[] = [];
+
+              if (totalPages <= 7) {
+                for (let i = 1; i <= totalPages; i++) pages.push(i);
+              } else {
+                const left = Math.max(2, page - 1);
+                const right = Math.min(totalPages - 1, page + 1);
+
+                pages.push(1);
+                if (left > 2) pages.push('...');
+
+                for (let i = left; i <= right; i++) pages.push(i);
+
+                if (right < totalPages - 1) pages.push('...');
+                pages.push(totalPages);
+              }
+
+              return pages.map((pNum, idx) => {
+                if (pNum === '...') {
+                  return (
+                    <div key={`dots-${idx}`} className="px-2 text-muted-foreground">…</div>
+                  );
+                }
+
+                const isCurrent = pNum === page;
+                return (
+                  <Button
+                    key={`page-${pNum}`}
+                    size="sm"
+                    onClick={() => setPage(Number(pNum))}
+                    className={`h-8 w-8 rounded-full ${isCurrent ? 'bg-primary text-primary-foreground' : 'bg-background/50 hover:bg-primary/10'}`}
+                    aria-current={isCurrent ? 'page' : undefined}
+                  >
+                    {pNum}
+                  </Button>
+                );
+              });
+            })()}
+
+            {/* Siguiente / Última */}
+            <Button size="sm" variant="ghost" className="h-8 w-8 rounded-full" onClick={() => setPage(p => Math.min(Math.max(1, Math.ceil(total / pageSize)), p + 1))} disabled={page >= Math.ceil(Math.max(1, total) / pageSize)}>
+              <ChevronRight className="w-4 h-4" />
+            </Button>
+            <Button size="sm" variant="ghost" className="h-8 w-8 rounded-full" onClick={() => setPage(Math.max(1, Math.ceil(total / pageSize)))} disabled={page === Math.max(1, Math.ceil(total / pageSize))}>
+              <ChevronsRight className="w-4 h-4" />
+            </Button>
+          </div>
+        </div>
       </Card>
 
       {userRole === "admin" && (
@@ -484,6 +678,7 @@ export const DocumentsTable = ({ userRole = "admin", workspaceId }: DocumentsTab
           onClose={() => setShowUploadModal(false)}
           onUpload={handleDocumentUpload}
           isUploading={isUploading}
+          workspaceId={workspaceId}
         />
       )}
 
@@ -492,6 +687,7 @@ export const DocumentsTable = ({ userRole = "admin", workspaceId }: DocumentsTab
           isOpen={isAttributeManagerOpen}
           onClose={() => setIsAttributeManagerOpen(false)}
           onSave={handleSaveAttributes}
+          workspaceId={workspaceId}
         />
       )}
 
@@ -587,6 +783,65 @@ export const DocumentsTable = ({ userRole = "admin", workspaceId }: DocumentsTab
               )}
             </div>
           )}
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={showPdfViewer} onOpenChange={(open) => { setShowPdfViewer(open); if (!open) { setPdfPathToView(null); } }}>
+        <DialogContent className="max-w-4xl max-h-[90vh]">
+          <DialogHeader>
+            <DialogTitle>Visor PDF</DialogTitle>
+            <DialogDescription>Visualización segura del documento</DialogDescription>
+          </DialogHeader>
+
+          <div className="h-[75vh]">
+            {pdfPathToView ? (
+              <PdfViewerNoDownload path={pdfPathToView} watermarkText={usuario?.email} />
+            ) : (
+              <div className="flex items-center justify-center h-full">Seleccione un documento para ver</div>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={showDeleteModal} onOpenChange={setShowDeleteModal}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Confirmar eliminación</DialogTitle>
+            <DialogDescription>
+              Este documento será eliminado de la base de datos porque está siendo retirado.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4">
+            {deleteStep === 'confirm' && (
+              <div>
+                <p className="text-sm text-muted-foreground">¿Estás seguro que quieres continuar? Al confirmar se enviará un código OTP a tu correo para validar la eliminación.</p>
+                <div className="flex justify-end gap-2 mt-4">
+                  <Button variant="outline" onClick={() => setShowDeleteModal(false)}>Cancelar</Button>
+                  <Button onClick={handleSendOtp}>Confirmar y Enviar código</Button>
+                </div>
+              </div>
+            )}
+
+            {deleteStep === 'loading' && (
+              <div className="flex items-center justify-center py-6">
+                <Loader2 className="w-6 h-6 animate-spin mr-2" /> Enviando...
+              </div>
+            )}
+
+            {deleteStep === 'otp' && (
+              <div>
+                <p className="text-sm text-muted-foreground">Ingresa el código OTP enviado a tu correo para confirmar la eliminación.</p>
+                <div className="mt-3">
+                  <Input value={otpCode} onChange={(e) => setOtpCode(e.target.value)} placeholder="Código OTP" />
+                </div>
+                <div className="flex justify-end gap-2 mt-4">
+                  <Button variant="outline" onClick={() => { setShowDeleteModal(false); setDeleteStep('confirm'); }}>Cancelar</Button>
+                  <Button onClick={handleVerifyOtpAndDelete}>Verificar y Eliminar</Button>
+                </div>
+              </div>
+            )}
+          </div>
         </DialogContent>
       </Dialog>
     </div>

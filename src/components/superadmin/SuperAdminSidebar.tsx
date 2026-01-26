@@ -20,7 +20,7 @@ import tiverLogo from "@/assets/tiver-logo.png";
 
 interface SuperAdminSidebarProps {
   currentView: string;
-  onViewChange: (view: "dashboard" | "workspaces" | "users" | "subscriptions") => void;
+  onViewChange: (view: "dashboard" | "workspaces" | "users" | "logs") => void;
 }
 
 const menuItems = [
@@ -43,10 +43,10 @@ const menuItems = [
     description: "Gestión de usuarios"
   },
   {
-    id: "subscriptions",
-    label: "Suscripciones",
+    id: "logs",
+    label: "Registros",
     icon: CalendarCheck,
-    description: "Gestión de suscripciones"
+    description: "Ver registros del sistema"
   }
   
 ];

@@ -18,11 +18,12 @@ interface DocumentUploadModalProps {
   onClose: () => void;
   onUpload: (file: File, documentData: Partial<DocumentData>, customAttributes: Array<{ atributo_id: string; valor: string }>) => void;
   isUploading?: boolean;
+  workspaceId?: string;
 }
 
-export const DocumentUploadModal = ({ isOpen, onClose, onUpload, isUploading = false }: DocumentUploadModalProps) => {
+export const DocumentUploadModal = ({ isOpen, onClose, onUpload, isUploading = false, workspaceId }: DocumentUploadModalProps) => {
   const { toast } = useToast();
-  const { getAttributesForDocumentType } = useCustomAttributes();
+  const { getAttributesForDocumentType } = useCustomAttributes(workspaceId);
 
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [documentType, setDocumentType] = useState<string>("");

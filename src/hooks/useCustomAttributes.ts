@@ -9,6 +9,7 @@ export interface CustomAttribute {
   documentTypes: string[];
   options?: string[];
   required: boolean;
+  workspaceId?: string | null;
 }
 
 export interface DocumentAttributeValue {
@@ -17,16 +18,23 @@ export interface DocumentAttributeValue {
 }
 
 // Hook mejorado para usar la base de datos
-export const useCustomAttributes = () => {
+export const useCustomAttributes = (workspaceId?: string) => {
   const [attributes, setAttributes] = useState<CustomAttribute[]>([]);
   const [documentAttributes, setDocumentAttributes] = useState<Record<string, DocumentAttributeValue[]>>({});
 
   // Cargar atributos desde la BD
   const loadAttributes = async () => {
     try {
-      const { data, error } = await supabase
-        .from("atributos_personalizados")
-        .select("*");
+      let query: any = supabase.from("atributos_personalizados").select("*").order('nombre', { ascending: true });
+      if (workspaceId) {
+        // return globals (workspace_id IS NULL) and workspace-specific
+        query = query.or(`workspace_id.eq.${workspaceId},workspace_id.is.null`);
+      } else {
+        // only global
+        query = query.is('workspace_id', null);
+      }
+
+      const { data, error } = await query;
       if (error) throw error;
       if (data) {
         // Mapear el campo 'nombre' a 'name' y 'tipo' a 'type'
@@ -38,6 +46,8 @@ export const useCustomAttributes = () => {
           documentTypes: attr.tipos_documento || [],
           options: attr.opciones || [],
           required: attr.requerido || false,
+          // include workspace id so UI can show if global or workspace-specific
+          workspaceId: attr.workspace_id || null
         }));
         setAttributes(mapped);
       }
@@ -75,27 +85,63 @@ export const useCustomAttributes = () => {
     loadDocumentAttributes();
   }, []);
 
-  // Guardar atributos personalizados en la BD
-  const saveAttributes = async (newAttributes: Omit<CustomAttribute, "id">[]) => {
+  // Crear un atributo personalizado en la BD
+  const createAttribute = async (attr: Omit<CustomAttribute, "id">, workspaceIdParam?: string) => {
     try {
       const { data, error } = await supabase
-        .from("atributos_personalizados")
-        .upsert(
-          newAttributes.map(attr => ({
-            nombre: attr.name,
-            tipo: attr.type,
-            tipos_documento: attr.documentTypes,
-            opciones: attr.options || [],
-            requerido: attr.required
-          })),
-          { onConflict: "nombre" } // campo único para upsert
-        );
+        .from('atributos_personalizados')
+        .insert({
+          nombre: attr.name,
+          tipo: attr.type,
+          tipos_documento: attr.documentTypes,
+          opciones: attr.options || [],
+          requerido: attr.required,
+          workspace_id: workspaceIdParam || null
+        })
+        .select()
+        .single();
 
       if (error) throw error;
-      // Recargar la lista desde la BD para asegurar que tenemos los IDs correctos
+      await loadAttributes();
+      return data;
+    } catch (error) {
+      console.error('Error creating custom attribute:', error);
+      throw error;
+    }
+  };
+
+  const updateAttribute = async (id: string, updates: Partial<Omit<CustomAttribute, 'id'>>) => {
+    try {
+      const { data, error } = await supabase
+        .from('atributos_personalizados')
+        .update({
+          nombre: updates.name,
+          tipo: updates.type,
+          tipos_documento: updates.documentTypes,
+          opciones: updates.options || [],
+          requerido: updates.required
+        })
+        .eq('id', id)
+        .select()
+        .single();
+
+      if (error) throw error;
+      await loadAttributes();
+      return data;
+    } catch (error) {
+      console.error('Error updating custom attribute:', error);
+      throw error;
+    }
+  };
+
+  const deleteAttribute = async (id: string) => {
+    try {
+      const { error } = await supabase.from('atributos_personalizados').delete().eq('id', id);
+      if (error) throw error;
       await loadAttributes();
     } catch (error) {
-      console.error("Error saving custom attributes to DB:", error);
+      console.error('Error deleting custom attribute:', error);
+      throw error;
     }
   };
 
@@ -143,7 +189,9 @@ export const useCustomAttributes = () => {
 
   return {
     attributes,
-    saveAttributes,
+    createAttribute,
+    updateAttribute,
+    deleteAttribute,
     getAttributesForDocumentType,
     documentAttributes,
     saveDocumentAttributes,

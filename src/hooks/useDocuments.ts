@@ -80,18 +80,31 @@ export interface UploadDocumentParams {
   }>;
 }
 
-export const useDocuments = (workspaceId?: string) => {
+export const useDocuments = (workspaceId?: string, page: number = 1, pageSize: number = 10) => {
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
   const {
-    data: documents = [],
+    data: pageResult,
     isLoading,
     error,
     refetch
   } = useQuery({
-    queryKey: ['documents', workspaceId],
-    queryFn: () => workspaceId ? documentService.getDocumentsByWorkspace(workspaceId) : Promise.resolve([]),
+    queryKey: ['documents', workspaceId, page, pageSize],
+    queryFn: async () => {
+      if (!workspaceId) return { rows: [] as DocumentWithAttributes[], total: 0 };
+
+      const start = (page - 1) * pageSize;
+      const end = start + pageSize - 1;
+
+      const [{ data }, totalErrOrCount] = await Promise.all([
+        documentService.getDocumentsByWorkspacePaged(workspaceId, start, end),
+        documentService.getDocumentsCount(workspaceId).catch(e => { throw e; })
+      ] as any);
+
+      const total = typeof totalErrOrCount === 'number' ? totalErrOrCount : 0;
+      return { rows: data || [], total };
+    },
     enabled: !!workspaceId,
   });
 
@@ -208,7 +221,7 @@ export const useDocuments = (workspaceId?: string) => {
   };
 
   return {
-    documents: documents as DocumentWithAttributes[],
+    documents: (pageResult?.rows || []) as DocumentWithAttributes[],
     isLoading,
     error,
     refetch,
@@ -219,6 +232,7 @@ export const useDocuments = (workspaceId?: string) => {
     deleteDocument: deleteMutation.mutate,
     isDeleting: deleteMutation.isPending,
     downloadDocument,
+    total: pageResult?.total || 0,
   };
 };
 

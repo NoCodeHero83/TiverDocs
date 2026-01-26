@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useToast } from '@/hooks/use-toast';
+import { logActivity } from '@/services/activityService';
 
 export type UserRole = 'SuperAdmin' | 'Administrador' | 'Visualizador';
 export type UserStatus = 'Activo' | 'Inactivo';
@@ -150,6 +151,16 @@ export const useUsers = () => {
           title: 'Usuario creado',
           description: `${userData.full_name} ha sido creado exitosamente`
         });
+        try {
+          await logActivity({
+            accion: 'Usuario creado',
+            entidad_tipo: 'usuario',
+            entidad_nombre: userData.full_name,
+            entidad_id: updatedUser.id
+          });
+        } catch (e) {
+          console.error('[useUsers] logActivity error', e);
+        }
 
         return updatedUser;
       } catch (innerError: any) {
