@@ -1,4 +1,5 @@
 import { supabase } from '@/lib/supabase';
+import { logActivity } from '@/services/activityService';
 
 export interface RegisterRequest {
   id: string;
@@ -35,6 +36,18 @@ export const createRegisterRequest = async (data: CreateRegisterRequestData): Pr
     .single();
 
   if (error) throw error;
+  try {
+    await logActivity({
+      accion: 'Solicitud de registro creada',
+      entidad_tipo: 'register_request',
+      entidad_nombre: newRequest.company_name,
+      entidad_id: newRequest.id,
+      metadata: { email: newRequest.email }
+    } as any);
+  } catch (e) {
+    console.error('[registerRequestService] logActivity create error', e);
+  }
+
   return newRequest;
 };
 
@@ -64,6 +77,17 @@ export const approveRegisterRequest = async (id: string) => {
     .eq('id', id);
 
   if (error) throw error;
+  try {
+    await logActivity({
+      accion: 'Solicitud de registro aprobada',
+      entidad_tipo: 'register_request',
+      entidad_id: id,
+      entidad_nombre: null,
+      metadata: { reviewed_by: user?.id || null }
+    } as any);
+  } catch (e) {
+    console.error('[registerRequestService] logActivity approve error', e);
+  }
 };
 
 // Rechazar solicitud
@@ -80,4 +104,15 @@ export const rejectRegisterRequest = async (id: string) => {
     .eq('id', id);
 
   if (error) throw error;
+  try {
+    await logActivity({
+      accion: 'Solicitud de registro rechazada',
+      entidad_tipo: 'register_request',
+      entidad_id: id,
+      entidad_nombre: null,
+      metadata: { reviewed_by: user?.id || null }
+    } as any);
+  } catch (e) {
+    console.error('[registerRequestService] logActivity reject error', e);
+  }
 };

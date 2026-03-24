@@ -256,6 +256,15 @@ export const useUsers = () => {
 
   const deleteUser = async (userId: string) => {
     try {
+      // 0. Leer nombre del usuario para logging
+      let userName: string | null = null;
+      try {
+        const { data: userRecord } = await supabase.from('usuarios').select('full_name').eq('id', userId).single();
+        userName = userRecord?.full_name || null;
+      } catch (e) {
+        // ignore
+      }
+
       // 1. Eliminar de la tabla usuarios (esto también eliminará user_workspaces por CASCADE)
       const { error: dbError } = await supabase
         .from('usuarios')
@@ -277,6 +286,17 @@ export const useUsers = () => {
         title: 'Usuario eliminado',
         description: 'El usuario ha sido eliminado exitosamente'
       });
+
+      try {
+        await logActivity({
+          accion: 'Usuario eliminado',
+          entidad_tipo: 'usuario',
+          entidad_nombre: userName,
+          entidad_id: userId
+        } as any);
+      } catch (e) {
+        console.error('[useUsers] logActivity delete error', e);
+      }
     } catch (error: any) {
       toast({
         title: 'Error',

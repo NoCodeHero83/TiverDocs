@@ -67,6 +67,15 @@ export const ResetPasswordPage = () => {
         title: "Contraseña actualizada",
         description: "Tu contraseña ha sido cambiada exitosamente.",
       });
+        try {
+          await logActivity({
+            accion: 'Contraseña actualizada',
+            entidad_tipo: 'usuario',
+            entidad_id: null
+          } as any);
+        } catch (e) {
+          console.error('[ResetPasswordPage] logActivity error', e);
+        }
 
       // Redirigir al login después de 2 segundos
       setTimeout(() => {

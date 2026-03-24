@@ -6,6 +6,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, Di
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { supabase } from '@/lib/supabase';
+import { logActivity } from '@/services/activityService';
 import { useAuth } from '@/contexts/AuthContext';
 import { Select } from '@/components/ui/select';
 
@@ -82,6 +83,20 @@ export const SubscriptionsManager = () => {
         } catch (e) {
           console.error('error assigning workspace users', e);
         }
+      }
+
+      // Log subscription creation
+      try {
+        const workspaceName = workspaces.find(w => w.id === form.workspace_id)?.name || null;
+        await logActivity({
+          accion: 'Suscripción creada',
+          entidad_tipo: 'subscription',
+          entidad_id: created.id,
+          entidad_nombre: workspaceName,
+          metadata: { created }
+        } as any);
+      } catch (e) {
+        console.error('[SubscriptionsManager] logActivity create error', e);
       }
 
       setIsCreateOpen(false);

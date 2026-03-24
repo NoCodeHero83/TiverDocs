@@ -74,6 +74,19 @@ export const documentService = {
 
     if (error) throw error;
 
+    // Log file upload (storage)
+    try {
+      await logActivity({
+        accion: 'Documento subido',
+        entidad_tipo: 'documento',
+        entidad_nombre: file.name,
+        entidad_id: null,
+        metadata: { path: data.path }
+      } as any);
+    } catch (e) {
+      console.error('[documentService] logActivity upload error', e);
+    }
+
     return data.path;
   },
 
@@ -228,6 +241,19 @@ export const documentService = {
       .single();
 
     if (error) throw error;
+
+    // Log document modification
+    try {
+      await logActivity({
+        accion: 'Documento modificado',
+        entidad_tipo: 'documento',
+        entidad_nombre: (data && data.file_name) || (updates && (updates as any).file_name) || null,
+        entidad_id: documentId,
+        metadata: updates || null
+      } as any);
+    } catch (e) {
+      console.error('[documentService] logActivity update error', e);
+    }
 
     return data;
   },
