@@ -1,0 +1,7 @@
+{
+  "imports": {
+    "@supabase/supabase-js": "npm:@supabase/supabase-js@2",
+    "@std/dotenv": "jsr:@std/dotenv@^0.225.6",
+    "smtp": "https://deno.land/x/smtp@v0.7.0/mod.ts"
+  }
+}
