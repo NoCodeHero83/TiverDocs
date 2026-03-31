@@ -3,7 +3,13 @@ import PdfViewerNoDownload from "@/components/PdfViewerNoDownload";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   Table,
@@ -11,7 +17,7 @@ import {
   TableCell,
   TableHead,
   TableHeader,
-  TableRow
+  TableRow,
 } from "@/components/ui/table";
 import {
   Dialog,
@@ -36,7 +42,7 @@ import {
   ChevronLeft,
   ChevronRight,
   ChevronsLeft,
-  ChevronsRight
+  ChevronsRight,
 } from "lucide-react";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
@@ -51,14 +57,18 @@ import { CustomAttribute } from "@/hooks/useCustomAttributes";
 import { useDocuments, DocumentWithAttributes } from "@/hooks/useDocuments";
 import { useAuth } from "@/contexts/AuthContext";
 import { DocumentData } from "@/services/documentService";
-import { logActivity } from '@/services/activityService';
+import { logActivity } from "@/services/activityService";
+import { SecurityChallengeDialog } from "../auth/SecurityChallengeDialog";
 
 interface DocumentsTableProps {
   userRole?: "admin" | "viewer";
   workspaceId?: string;
 }
 
-export const DocumentsTable = ({ userRole = "admin", workspaceId }: DocumentsTableProps) => {
+export const DocumentsTable = ({
+  userRole = "admin",
+  workspaceId,
+}: DocumentsTableProps) => {
   const { usuario } = useAuth();
   const [page, setPage] = useState(1);
   const pageSize = 10;
@@ -71,7 +81,7 @@ export const DocumentsTable = ({ userRole = "admin", workspaceId }: DocumentsTab
     downloadDocument,
     deleteDocument,
     isDeleting,
-    total
+    total,
   } = useDocuments(workspaceId, page, pageSize);
 
   const [searchTerm, setSearchTerm] = useState("");
@@ -82,27 +92,40 @@ export const DocumentsTable = ({ userRole = "admin", workspaceId }: DocumentsTab
   const [showUploadModal, setShowUploadModal] = useState(false);
   const [isAttributeManagerOpen, setIsAttributeManagerOpen] = useState(false);
   const [showDetailsModal, setShowDetailsModal] = useState(false);
-  const [selectedDocument, setSelectedDocument] = useState<DocumentWithAttributes | null>(null);
+  const [selectedDocument, setSelectedDocument] =
+    useState<DocumentWithAttributes | null>(null);
   const [showPdfViewer, setShowPdfViewer] = useState(false);
   const [pdfPathToView, setPdfPathToView] = useState<string | null>(null);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
-  const [deleteTarget, setDeleteTarget] = useState<DocumentWithAttributes | null>(null);
-  const [deleteStep, setDeleteStep] = useState<'confirm' | 'otp' | 'loading'>('confirm');
-  const [otpCode, setOtpCode] = useState("");
+  const [deleteTarget, setDeleteTarget] =
+    useState<DocumentWithAttributes | null>(null);
+  const [showSecurityChallenge, setShowSecurityChallenge] = useState(false);
+  const [pendingActionTarget, setPendingActionTarget] =
+    useState<DocumentWithAttributes | null>(null);
+  const [pendingActionType, setPendingActionType] = useState<
+    "download" | "delete" | "view" | null
+  >(null);
 
-  const { attributes, saveDocumentAttributes, getDocumentAttributes } = useCustomAttributes(workspaceId);
+  const { attributes, saveDocumentAttributes, getDocumentAttributes } =
+    useCustomAttributes(workspaceId);
 
   const getSelectedDocumentTypeForFilters = () => {
     switch (documentTypeFilter) {
-      case "Pagaré": return "Pagaré";
-      case "Solicitud de Crédito": return "Solicitud de crédito";
-      case "Consentimiento Informado": return "Consentimiento informado";
-      default: return "";
+      case "Pagaré":
+        return "Pagaré";
+      case "Solicitud de Crédito":
+        return "Solicitud de crédito";
+      case "Consentimiento Informado":
+        return "Consentimiento informado";
+      default:
+        return "";
     }
   };
 
   const selectedDocumentTypeForFilters = getSelectedDocumentTypeForFilters();
-  const dynamicFilterConfigs = getFilterConfigsByDocumentType(selectedDocumentTypeForFilters);
+  const dynamicFilterConfigs = getFilterConfigsByDocumentType(
+    selectedDocumentTypeForFilters,
+  );
 
   const getDocumentStatus = (fechaVencimiento?: string) => {
     if (!fechaVencimiento) return "vigente";
@@ -119,28 +142,40 @@ export const DocumentsTable = ({ userRole = "admin", workspaceId }: DocumentsTab
 
   const getStatusColor = (status: string) => {
     switch (status) {
-      case "vencido": return "bg-destructive/10 text-destructive";
-      case "por-vencer": return "bg-warning/10 text-warning";
-      case "vigente": return "bg-success/10 text-success";
-      default: return "bg-muted text-muted-foreground";
+      case "vencido":
+        return "bg-destructive/10 text-destructive";
+      case "por-vencer":
+        return "bg-warning/10 text-warning";
+      case "vigente":
+        return "bg-success/10 text-success";
+      default:
+        return "bg-muted text-muted-foreground";
     }
   };
 
   const getStatusIcon = (status: string) => {
     switch (status) {
-      case "vencido": return <AlertTriangle className="w-4 h-4" />;
-      case "por-vencer": return <Clock className="w-4 h-4" />;
-      case "vigente": return <CheckCircle className="w-4 h-4" />;
-      default: return <FileText className="w-4 h-4" />;
+      case "vencido":
+        return <AlertTriangle className="w-4 h-4" />;
+      case "por-vencer":
+        return <Clock className="w-4 h-4" />;
+      case "vigente":
+        return <CheckCircle className="w-4 h-4" />;
+      default:
+        return <FileText className="w-4 h-4" />;
     }
   };
 
   const getStatusLabel = (status: string) => {
     switch (status) {
-      case "vencido": return "Vencido";
-      case "por-vencer": return "Por vencer";
-      case "vigente": return "Vigente";
-      default: return "Desconocido";
+      case "vencido":
+        return "Vencido";
+      case "por-vencer":
+        return "Por vencer";
+      case "vigente":
+        return "Vigente";
+      default:
+        return "Desconocido";
     }
   };
 
@@ -150,18 +185,22 @@ export const DocumentsTable = ({ userRole = "admin", workspaceId }: DocumentsTab
       style: "currency",
       currency: "COP",
       minimumFractionDigits: 0,
-      maximumFractionDigits: 0
-    }).format(amount).replace(/\./g, ',').replace(/,([^,]*)$/, '.$1').replace(/,/g, '.');
+      maximumFractionDigits: 0,
+    })
+      .format(amount)
+      .replace(/\./g, ",")
+      .replace(/,([^,]*)$/, ".$1")
+      .replace(/,/g, ".");
   };
 
   const applyAdvancedFilters = (document: DocumentWithAttributes) => {
-    return advancedFilters.every(filter => {
+    return advancedFilters.every((filter) => {
       let fieldValue: any;
 
-      if (filter.field.startsWith('custom_')) {
-        const customAttrName = filter.field.replace('custom_', '');
-        const customValue = document.valores_atributos?.find(attr =>
-          attr.atributos_personalizados.nombre === customAttrName
+      if (filter.field.startsWith("custom_")) {
+        const customAttrName = filter.field.replace("custom_", "");
+        const customValue = document.valores_atributos?.find(
+          (attr) => attr.atributos_personalizados.nombre === customAttrName,
         );
         fieldValue = customValue?.valor;
       } else {
@@ -172,13 +211,22 @@ export const DocumentsTable = ({ userRole = "admin", workspaceId }: DocumentsTab
 
       switch (filter.operator) {
         case "contains":
-          return fieldValue.toString().toLowerCase().includes(filter.value.toString().toLowerCase());
+          return fieldValue
+            .toString()
+            .toLowerCase()
+            .includes(filter.value.toString().toLowerCase());
 
         case "equals":
-          if (typeof fieldValue === 'number' && typeof filter.value === 'number') {
+          if (
+            typeof fieldValue === "number" &&
+            typeof filter.value === "number"
+          ) {
             return fieldValue === filter.value;
           }
-          return fieldValue.toString().toLowerCase() === filter.value.toString().toLowerCase();
+          return (
+            fieldValue.toString().toLowerCase() ===
+            filter.value.toString().toLowerCase()
+          );
 
         case "greaterThan":
           return Number(fieldValue) > Number(filter.value);
@@ -187,8 +235,11 @@ export const DocumentsTable = ({ userRole = "admin", workspaceId }: DocumentsTab
           return Number(fieldValue) < Number(filter.value);
 
         case "between":
-          if (filter.field.includes("fecha") || filter.field.includes("Fecha")) {
-            const [fromDate, toDate] = filter.value.toString().split('|');
+          if (
+            filter.field.includes("fecha") ||
+            filter.field.includes("Fecha")
+          ) {
+            const [fromDate, toDate] = filter.value.toString().split("|");
             if (!fromDate || !toDate) return true;
 
             const docDate = new Date(fieldValue.toString());
@@ -196,9 +247,8 @@ export const DocumentsTable = ({ userRole = "admin", workspaceId }: DocumentsTab
             const to = new Date(toDate);
 
             return docDate >= from && docDate <= to;
-          }
-          else if (typeof fieldValue === 'number') {
-            const [minValue, maxValue] = filter.value.toString().split('|');
+          } else if (typeof fieldValue === "number") {
+            const [minValue, maxValue] = filter.value.toString().split("|");
             if (!minValue || !maxValue) return true;
 
             const numValue = Number(fieldValue);
@@ -225,28 +275,113 @@ export const DocumentsTable = ({ userRole = "admin", workspaceId }: DocumentsTab
     });
   };
 
-  const filteredDocuments = pagedDocuments.filter(doc => {
+  const filteredDocuments = pagedDocuments.filter((doc) => {
     const matchesSearch =
       doc.nombre_deudor?.toLowerCase().includes(searchTerm.toLowerCase()) ||
       doc.id_deudor?.includes(searchTerm) ||
       doc.id.toLowerCase().includes(searchTerm.toLowerCase());
 
-    const matchesDocumentType = documentTypeFilter === "all" || doc.tipo_documento === documentTypeFilter;
+    const matchesDocumentType =
+      documentTypeFilter === "all" || doc.tipo_documento === documentTypeFilter;
 
     const status = getDocumentStatus(doc.fecha_vencimiento);
     const matchesStatus = statusFilter === "all" || status === statusFilter;
 
     const matchesAdvancedFilters = applyAdvancedFilters(doc);
 
-    return matchesSearch && matchesDocumentType && matchesStatus && matchesAdvancedFilters;
+    return (
+      matchesSearch &&
+      matchesDocumentType &&
+      matchesStatus &&
+      matchesAdvancedFilters
+    );
   });
 
   const handleDownload = async (document: DocumentWithAttributes) => {
-    // Open confirmation modal instead of immediate download
-    setDeleteTarget(document);
-    setDeleteStep('confirm');
-    setOtpCode("");
-    setShowDeleteModal(true);
+    // Si es un Pagaré, requerir seguridad extra
+    if (document.tipo_documento === "Pagaré") {
+      setPendingActionTarget(document);
+      setPendingActionType("download");
+      setShowSecurityChallenge(true);
+      return;
+    }
+
+    // Para otros tipos, descargar directamente
+    try {
+      await downloadDocument(document.file_path, document.file_name);
+    } catch (err: any) {
+      console.error("[DocumentsTable] download error", err);
+    }
+  };
+
+  const handleSecuritySuccess = async () => {
+    if (!pendingActionTarget || !pendingActionType) return;
+
+    try {
+      if (pendingActionType === "download") {
+        console.log(
+          "[DocumentsTable] Descarga de pagaré autorizada:",
+          pendingActionTarget.id,
+        );
+
+        // Registrar descarga sensible
+        await logActivity({
+          accion: "Descarga de pagaré - Verificado con MFA",
+          entidad_tipo: "documento",
+          entidad_nombre: pendingActionTarget.file_name,
+          entidad_id: pendingActionTarget.id,
+          metadata: { tipo: "pagare", security: "MFA" },
+        });
+
+        // Proceder a descargar
+        await downloadDocument(
+          pendingActionTarget.file_path,
+          pendingActionTarget.file_name,
+        );
+      } else if (pendingActionType === "delete") {
+        console.log(
+          "[DocumentsTable] Eliminación autorizada:",
+          pendingActionTarget.id,
+        );
+
+        // Registrar eliminación sensible
+        await logActivity({
+          accion: "Eliminación de documento - Verificado con MFA",
+          entidad_tipo: "documento",
+          entidad_nombre: pendingActionTarget.file_name,
+          entidad_id: pendingActionTarget.id,
+          metadata: { action: "delete", security: "MFA" },
+        });
+
+        // Proceder a eliminar
+        deleteDocument({
+          documentId: pendingActionTarget.id,
+          filePath: pendingActionTarget.file_path,
+        });
+      } else if (pendingActionType === "view") {
+        console.log(
+          "[DocumentsTable] Vista de PDF autorizada:",
+          pendingActionTarget.id,
+        );
+
+        // Registrar vista sensible
+        await logActivity({
+          accion: "Visualización de PDF - Verificado con MFA",
+          entidad_tipo: "documento",
+          entidad_nombre: pendingActionTarget.file_name,
+          entidad_id: pendingActionTarget.id,
+          metadata: { action: "view", security: "MFA" },
+        });
+
+        setPdfPathToView(pendingActionTarget.file_path);
+        setShowPdfViewer(true);
+      }
+
+      setPendingActionTarget(null);
+      setPendingActionType(null);
+    } catch (err: any) {
+      console.error("[DocumentsTable] error en operación sensible", err);
+    }
   };
 
   const handleViewDetails = (document: DocumentWithAttributes) => {
@@ -255,16 +390,21 @@ export const DocumentsTable = ({ userRole = "admin", workspaceId }: DocumentsTab
   };
 
   const handleViewPdf = (document: DocumentWithAttributes) => {
-    console.log("[DocumentsTable] open pdf viewer", { id: document.id, path: document.file_path });
-    setPdfPathToView(document.file_path);
-    setShowPdfViewer(true);
+    // Requerir reto seguridad para ver el PDF
+    setPendingActionTarget(document);
+    setPendingActionType("view");
+    setShowSecurityChallenge(true);
   };
 
   const handleUpload = () => {
     setShowUploadModal(true);
   };
 
-  const handleDocumentUpload = (file: File, documentData: Partial<DocumentData>, customAttributes: Array<{ atributo_id: string; valor: string }>) => {
+  const handleDocumentUpload = (
+    file: File,
+    documentData: Partial<DocumentData>,
+    customAttributes: Array<{ atributo_id: string; valor: string }>,
+  ) => {
     if (!workspaceId || !usuario) return;
 
     uploadDocument({
@@ -272,7 +412,7 @@ export const DocumentsTable = ({ userRole = "admin", workspaceId }: DocumentsTab
       workspaceId,
       userId: usuario.id,
       documentData,
-      customAttributes
+      customAttributes,
     });
 
     setShowUploadModal(false);
@@ -283,104 +423,10 @@ export const DocumentsTable = ({ userRole = "admin", workspaceId }: DocumentsTab
   };
 
   const handleDelete = (document: DocumentWithAttributes) => {
-    if (confirm('¿Estás seguro de eliminar este documento?')) {
-      deleteDocument({ documentId: document.id, filePath: document.file_path });
-    }
-  };
-
-  const handleSendOtp = async () => {
-    if (!deleteTarget) return;
-    setDeleteStep('loading');
-    try {
-      const functionsBase = import.meta.env.VITE_SUPABASE_FUNCTIONS_URL || `${import.meta.env.VITE_SUPABASE_URL}/functions/v1`;
-      const { data: session } = await (await import('@/lib/supabase')).supabase.auth.getSession();
-      const token = session?.session?.access_token;
-      const res = await fetch(`${functionsBase}/send-otp`, {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: deleteTarget.email || undefined, documentId: deleteTarget.id })
-      });
-      const json = await res.json();
-      if (!res.ok) {
-        console.error('[DocumentsTable] send-otp error', json);
-        setDeleteStep('confirm');
-        return;
-      }
-      console.log('[DocumentsTable] send-otp response', json);
-      setDeleteStep('otp');
-    } catch (err) {
-      console.error('[DocumentsTable] send-otp exception', err);
-      setDeleteStep('confirm');
-    }
-  };
-
-  const handleVerifyOtpAndDelete = async () => {
-    if (!deleteTarget) return;
-    setDeleteStep('loading');
-    try {
-      // Validate OTP client-side by querying `otp_codes` table and deleting the row if valid
-      const { supabase } = await import('@/lib/supabase');
-      console.log('[DocumentsTable] verifying otp client-side', { code: otpCode, documentId: deleteTarget.id });
-
-      const { data: rows, error } = await supabase
-        .from('otp_codes')
-        .select('*')
-        .eq('code', otpCode)
-        .eq('document_id', deleteTarget.id)
-        .order('created_at', { ascending: false })
-        .limit(1);
-
-      if (error) {
-        console.error('[DocumentsTable] otp query error', error);
-        setDeleteStep('otp');
-        return;
-      }
-
-      const row = (rows && rows[0]) || null;
-      if (!row) {
-        console.error('[DocumentsTable] otp not found');
-        setDeleteStep('otp');
-        return;
-      }
-
-      if (row.expires_at && new Date(row.expires_at) < new Date()) {
-        console.error('[DocumentsTable] otp expired', { expires_at: row.expires_at });
-        setDeleteStep('otp');
-        return;
-      }
-
-      // consume OTP (delete)
-      const { error: delErr } = await supabase.from('otp_codes').delete().eq('id', row.id);
-      if (delErr) {
-        console.error('[DocumentsTable] failed to consume otp', delErr);
-        setDeleteStep('otp');
-        return;
-      }
-
-      // proceed to download first, then delete the document
-      try {
-        await downloadDocument(deleteTarget.file_path, deleteTarget.file_name);
-      } catch (e) {
-        console.error('[DocumentsTable] download after OTP failed', e);
-        setDeleteStep('otp');
-        return;
-      }
-
-      try {
-        await deleteDocument({ documentId: deleteTarget.id, filePath: deleteTarget.file_path });
-      } catch (e) {
-        console.error('[DocumentsTable] delete after download failed', e);
-        // even if delete fails, we proceed to close modal so user isn't blocked
-      }
-
-      setShowDeleteModal(false);
-      setDeleteTarget(null);
-    } catch (err) {
-      console.error('Error verifying OTP or deleting document:', err);
-      setDeleteStep('otp');
-    } finally {
-      setOtpCode("");
-    }
+    // En lugar de confirm(), usamos el reto de seguridad
+    setPendingActionTarget(document);
+    setPendingActionType("delete");
+    setShowSecurityChallenge(true);
   };
 
   if (isLoading) {
@@ -412,15 +458,22 @@ export const DocumentsTable = ({ userRole = "admin", workspaceId }: DocumentsTab
               />
             </div>
 
-            <Select value={documentTypeFilter} onValueChange={setDocumentTypeFilter}>
+            <Select
+              value={documentTypeFilter}
+              onValueChange={setDocumentTypeFilter}
+            >
               <SelectTrigger className="bg-background/50">
                 <SelectValue placeholder="Tipo de documento" />
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">Todos los tipos</SelectItem>
                 <SelectItem value="Pagaré">Pagaré</SelectItem>
-                <SelectItem value="Solicitud de Crédito">Solicitud de crédito</SelectItem>
-                <SelectItem value="Consentimiento Informado">Consentimiento informado</SelectItem>
+                <SelectItem value="Solicitud de Crédito">
+                  Solicitud de crédito
+                </SelectItem>
+                <SelectItem value="Consentimiento Informado">
+                  Consentimiento informado
+                </SelectItem>
               </SelectContent>
             </Select>
 
@@ -493,11 +546,13 @@ export const DocumentsTable = ({ userRole = "admin", workspaceId }: DocumentsTab
       <Card className="shadow-card border-0 bg-gradient-card">
         <CardHeader>
           <div className="flex items-center justify-between">
-            <CardTitle>
-              Documentos ({total})
-            </CardTitle>
+            <CardTitle>Documentos ({total})</CardTitle>
             {userRole === "admin" && (
-              <Button onClick={handleUpload} className="bg-gradient-primary" disabled={isUploading}>
+              <Button
+                onClick={handleUpload}
+                className="bg-gradient-primary"
+                disabled={isUploading}
+              >
                 {isUploading ? (
                   <>
                     <Loader2 className="w-4 h-4 mr-2 animate-spin" />
@@ -530,7 +585,10 @@ export const DocumentsTable = ({ userRole = "admin", workspaceId }: DocumentsTab
               <TableBody>
                 {filteredDocuments.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
+                    <TableCell
+                      colSpan={7}
+                      className="text-center py-8 text-muted-foreground"
+                    >
                       No hay documentos para mostrar
                     </TableCell>
                   </TableRow>
@@ -538,23 +596,40 @@ export const DocumentsTable = ({ userRole = "admin", workspaceId }: DocumentsTab
                   filteredDocuments.map((doc) => {
                     const status = getDocumentStatus(doc.fecha_vencimiento);
                     return (
-                      <TableRow key={doc.id} className="hover:bg-muted/20 transition-colors">
-                        <TableCell className="font-medium">{doc.id.substring(0, 8)}...</TableCell>
+                      <TableRow
+                        key={doc.id}
+                        className="hover:bg-muted/20 transition-colors"
+                      >
+                        <TableCell className="font-medium">
+                          {doc.id.substring(0, 8)}...
+                        </TableCell>
                         <TableCell>{doc.tipo_documento}</TableCell>
                         <TableCell>
                           <div>
-                            <div className="font-medium">{doc.nombre_deudor || 'Sin nombre'}</div>
-                            <div className="text-sm text-muted-foreground">{doc.id_deudor || 'Sin ID'}</div>
+                            <div className="font-medium">
+                              {doc.nombre_deudor || "Sin nombre"}
+                            </div>
+                            <div className="text-sm text-muted-foreground">
+                              {doc.id_deudor || "Sin ID"}
+                            </div>
                           </div>
                         </TableCell>
                         <TableCell className="font-mono">
                           {formatCurrency(doc.valor_titulo)}
                         </TableCell>
                         <TableCell>
-                          {doc.fecha_vencimiento ? format(new Date(doc.fecha_vencimiento), "dd MMM yyyy", { locale: es }) : 'N/A'}
+                          {doc.fecha_vencimiento
+                            ? format(
+                                new Date(doc.fecha_vencimiento),
+                                "dd MMM yyyy",
+                                { locale: es },
+                              )
+                            : "N/A"}
                         </TableCell>
                         <TableCell>
-                          <Badge className={`${getStatusColor(status)} flex items-center gap-1 w-fit`}>
+                          <Badge
+                            className={`${getStatusColor(status)} flex items-center gap-1 w-fit`}
+                          >
                             {getStatusIcon(status)}
                             {getStatusLabel(status)}
                           </Badge>
@@ -611,20 +686,35 @@ export const DocumentsTable = ({ userRole = "admin", workspaceId }: DocumentsTab
           </div>
         </CardContent>
         <div className="flex items-center justify-between px-6 py-3">
-          <div className="text-sm text-muted-foreground">Mostrando página {page} de {Math.max(1, Math.ceil(total / pageSize))}</div>
+          <div className="text-sm text-muted-foreground">
+            Mostrando página {page} de{" "}
+            {Math.max(1, Math.ceil(total / pageSize))}
+          </div>
           <div className="flex items-center gap-2">
             {/* Primera / Anterior */}
-            <Button size="sm" variant="ghost" className="h-8 w-8 rounded-full" onClick={() => setPage(1)} disabled={page === 1}>
+            <Button
+              size="sm"
+              variant="ghost"
+              className="h-8 w-8 rounded-full"
+              onClick={() => setPage(1)}
+              disabled={page === 1}
+            >
               <ChevronsLeft className="w-4 h-4" />
             </Button>
-            <Button size="sm" variant="ghost" className="h-8 w-8 rounded-full" onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page === 1}>
+            <Button
+              size="sm"
+              variant="ghost"
+              className="h-8 w-8 rounded-full"
+              onClick={() => setPage((p) => Math.max(1, p - 1))}
+              disabled={page === 1}
+            >
               <ChevronLeft className="w-4 h-4" />
             </Button>
 
             {/* Page numbers with ellipsis */}
             {(() => {
               const totalPages = Math.max(1, Math.ceil(total / pageSize));
-              const pages: (number | '...')[] = [];
+              const pages: (number | "...")[] = [];
 
               if (totalPages <= 7) {
                 for (let i = 1; i <= totalPages; i++) pages.push(i);
@@ -633,18 +723,23 @@ export const DocumentsTable = ({ userRole = "admin", workspaceId }: DocumentsTab
                 const right = Math.min(totalPages - 1, page + 1);
 
                 pages.push(1);
-                if (left > 2) pages.push('...');
+                if (left > 2) pages.push("...");
 
                 for (let i = left; i <= right; i++) pages.push(i);
 
-                if (right < totalPages - 1) pages.push('...');
+                if (right < totalPages - 1) pages.push("...");
                 pages.push(totalPages);
               }
 
               return pages.map((pNum, idx) => {
-                if (pNum === '...') {
+                if (pNum === "...") {
                   return (
-                    <div key={`dots-${idx}`} className="px-2 text-muted-foreground">…</div>
+                    <div
+                      key={`dots-${idx}`}
+                      className="px-2 text-muted-foreground"
+                    >
+                      …
+                    </div>
                   );
                 }
 
@@ -654,8 +749,8 @@ export const DocumentsTable = ({ userRole = "admin", workspaceId }: DocumentsTab
                     key={`page-${pNum}`}
                     size="sm"
                     onClick={() => setPage(Number(pNum))}
-                    className={`h-8 w-8 rounded-full ${isCurrent ? 'bg-primary text-primary-foreground' : 'bg-background/50 hover:bg-primary/10'}`}
-                    aria-current={isCurrent ? 'page' : undefined}
+                    className={`h-8 w-8 rounded-full ${isCurrent ? "bg-primary text-primary-foreground" : "bg-background/50 hover:bg-primary/10"}`}
+                    aria-current={isCurrent ? "page" : undefined}
                   >
                     {pNum}
                   </Button>
@@ -664,10 +759,26 @@ export const DocumentsTable = ({ userRole = "admin", workspaceId }: DocumentsTab
             })()}
 
             {/* Siguiente / Última */}
-            <Button size="sm" variant="ghost" className="h-8 w-8 rounded-full" onClick={() => setPage(p => Math.min(Math.max(1, Math.ceil(total / pageSize)), p + 1))} disabled={page >= Math.ceil(Math.max(1, total) / pageSize)}>
+            <Button
+              size="sm"
+              variant="ghost"
+              className="h-8 w-8 rounded-full"
+              onClick={() =>
+                setPage((p) =>
+                  Math.min(Math.max(1, Math.ceil(total / pageSize)), p + 1),
+                )
+              }
+              disabled={page >= Math.ceil(Math.max(1, total) / pageSize)}
+            >
               <ChevronRight className="w-4 h-4" />
             </Button>
-            <Button size="sm" variant="ghost" className="h-8 w-8 rounded-full" onClick={() => setPage(Math.max(1, Math.ceil(total / pageSize)))} disabled={page === Math.max(1, Math.ceil(total / pageSize))}>
+            <Button
+              size="sm"
+              variant="ghost"
+              className="h-8 w-8 rounded-full"
+              onClick={() => setPage(Math.max(1, Math.ceil(total / pageSize)))}
+              disabled={page === Math.max(1, Math.ceil(total / pageSize))}
+            >
               <ChevronsRight className="w-4 h-4" />
             </Button>
           </div>
@@ -708,59 +819,96 @@ export const DocumentsTable = ({ userRole = "admin", workspaceId }: DocumentsTab
                 <h3 className="text-lg font-semibold mb-3">Datos Básicos</h3>
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <label className="text-sm font-medium text-muted-foreground">ID Documento</label>
+                    <label className="text-sm font-medium text-muted-foreground">
+                      ID Documento
+                    </label>
                     <p className="font-medium">{selectedDocument.id}</p>
                   </div>
                   <div>
-                    <label className="text-sm font-medium text-muted-foreground">Tipo de Documento</label>
-                    <p className="font-medium">{selectedDocument.tipo_documento}</p>
+                    <label className="text-sm font-medium text-muted-foreground">
+                      Tipo de Documento
+                    </label>
+                    <p className="font-medium">
+                      {selectedDocument.tipo_documento}
+                    </p>
                   </div>
                   <div>
-                    <label className="text-sm font-medium text-muted-foreground">Nombre del Archivo</label>
+                    <label className="text-sm font-medium text-muted-foreground">
+                      Nombre del Archivo
+                    </label>
                     <p className="font-medium">{selectedDocument.file_name}</p>
                   </div>
                   <div>
-                    <label className="text-sm font-medium text-muted-foreground">Tamaño</label>
-                    <p className="font-medium">{(selectedDocument.file_size / 1024 / 1024).toFixed(2)} MB</p>
+                    <label className="text-sm font-medium text-muted-foreground">
+                      Tamaño
+                    </label>
+                    <p className="font-medium">
+                      {(selectedDocument.file_size / 1024 / 1024).toFixed(2)} MB
+                    </p>
                   </div>
                   <div>
-                    <label className="text-sm font-medium text-muted-foreground">Estado</label>
+                    <label className="text-sm font-medium text-muted-foreground">
+                      Estado
+                    </label>
                     <p className="font-medium">{selectedDocument.estado}</p>
                   </div>
                   <div>
-                    <label className="text-sm font-medium text-muted-foreground">Fecha de Ingreso</label>
+                    <label className="text-sm font-medium text-muted-foreground">
+                      Fecha de Ingreso
+                    </label>
                     <p className="font-medium">
-                      {format(new Date(selectedDocument.created_at), "dd MMM yyyy", { locale: es })}
+                      {format(
+                        new Date(selectedDocument.created_at),
+                        "dd MMM yyyy",
+                        { locale: es },
+                      )}
                     </p>
                   </div>
                 </div>
               </div>
 
-              {(selectedDocument.nombre_deudor || selectedDocument.id_deudor) && (
+              {(selectedDocument.nombre_deudor ||
+                selectedDocument.id_deudor) && (
                 <div>
-                  <h3 className="text-lg font-semibold mb-3">Información del Deudor</h3>
+                  <h3 className="text-lg font-semibold mb-3">
+                    Información del Deudor
+                  </h3>
                   <div className="grid grid-cols-2 gap-4">
                     {selectedDocument.nombre_deudor && (
                       <div>
-                        <label className="text-sm font-medium text-muted-foreground">Nombre</label>
-                        <p className="font-medium">{selectedDocument.nombre_deudor}</p>
+                        <label className="text-sm font-medium text-muted-foreground">
+                          Nombre
+                        </label>
+                        <p className="font-medium">
+                          {selectedDocument.nombre_deudor}
+                        </p>
                       </div>
                     )}
                     {selectedDocument.id_deudor && (
                       <div>
-                        <label className="text-sm font-medium text-muted-foreground">ID</label>
-                        <p className="font-medium">{selectedDocument.id_deudor}</p>
+                        <label className="text-sm font-medium text-muted-foreground">
+                          ID
+                        </label>
+                        <p className="font-medium">
+                          {selectedDocument.id_deudor}
+                        </p>
                       </div>
                     )}
                     {selectedDocument.telefono && (
                       <div>
-                        <label className="text-sm font-medium text-muted-foreground">Teléfono</label>
-                        <p className="font-medium">{selectedDocument.telefono}</p>
+                        <label className="text-sm font-medium text-muted-foreground">
+                          Teléfono
+                        </label>
+                        <p className="font-medium">
+                          {selectedDocument.telefono}
+                        </p>
                       </div>
                     )}
                     {selectedDocument.email && (
                       <div>
-                        <label className="text-sm font-medium text-muted-foreground">Email</label>
+                        <label className="text-sm font-medium text-muted-foreground">
+                          Email
+                        </label>
                         <p className="font-medium">{selectedDocument.email}</p>
                       </div>
                     )}
@@ -768,84 +916,88 @@ export const DocumentsTable = ({ userRole = "admin", workspaceId }: DocumentsTab
                 </div>
               )}
 
-              {selectedDocument.valores_atributos && selectedDocument.valores_atributos.length > 0 && (
-                <div>
-                  <h3 className="text-lg font-semibold mb-3">Atributos Personalizados</h3>
-                  <div className="grid grid-cols-2 gap-4">
-                    {selectedDocument.valores_atributos.map((attr) => (
-                      <div key={attr.id}>
-                        <label className="text-sm font-medium text-muted-foreground">
-                          {attr.atributos_personalizados.nombre}
-                        </label>
-                        <p className="font-medium">{attr.valor}</p>
-                      </div>
-                    ))}
+              {selectedDocument.valores_atributos &&
+                selectedDocument.valores_atributos.length > 0 && (
+                  <div>
+                    <h3 className="text-lg font-semibold mb-3">
+                      Atributos Personalizados
+                    </h3>
+                    <div className="grid grid-cols-2 gap-4">
+                      {selectedDocument.valores_atributos.map((attr) => (
+                        <div key={attr.id}>
+                          <label className="text-sm font-medium text-muted-foreground">
+                            {attr.atributos_personalizados.nombre}
+                          </label>
+                          <p className="font-medium">{attr.valor}</p>
+                        </div>
+                      ))}
+                    </div>
                   </div>
-                </div>
-              )}
+                )}
             </div>
           )}
         </DialogContent>
       </Dialog>
 
-      <Dialog open={showPdfViewer} onOpenChange={(open) => { setShowPdfViewer(open); if (!open) { setPdfPathToView(null); } }}>
+      <Dialog
+        open={showPdfViewer}
+        onOpenChange={(open) => {
+          setShowPdfViewer(open);
+          if (!open) {
+            setPdfPathToView(null);
+          }
+        }}
+      >
         <DialogContent className="max-w-4xl max-h-[90vh]">
           <DialogHeader>
             <DialogTitle>Visor PDF</DialogTitle>
-            <DialogDescription>Visualización segura del documento</DialogDescription>
+            <DialogDescription>
+              Visualización segura del documento
+            </DialogDescription>
           </DialogHeader>
 
           <div className="h-[75vh]">
             {pdfPathToView ? (
-              <PdfViewerNoDownload path={pdfPathToView} watermarkText={usuario?.email} />
+              <PdfViewerNoDownload
+                path={pdfPathToView}
+                watermarkText={usuario?.email}
+              />
             ) : (
-              <div className="flex items-center justify-center h-full">Seleccione un documento para ver</div>
-            )}
-          </div>
-        </DialogContent>
-      </Dialog>
-
-      <Dialog open={showDeleteModal} onOpenChange={setShowDeleteModal}>
-        <DialogContent className="max-w-lg">
-          <DialogHeader>
-            <DialogTitle>Confirmar descarga</DialogTitle>
-            <DialogDescription>
-              Se descargará el documento y luego será eliminado. Se enviará un código OTP a tu correo para validar la descarga.
-            </DialogDescription>
-          </DialogHeader>
-
-          <div className="space-y-4">
-            {deleteStep === 'confirm' && (
-              <div>
-                <p className="text-sm text-muted-foreground">¿Deseas descargar este documento ahora? Al confirmar se enviará un código OTP a tu correo para validar la descarga.</p>
-                <div className="flex justify-end gap-2 mt-4">
-                  <Button variant="outline" onClick={() => setShowDeleteModal(false)}>Cancelar</Button>
-                  <Button onClick={handleSendOtp}>Confirmar y Enviar código para descargar</Button>
-                </div>
-              </div>
-            )}
-
-            {deleteStep === 'loading' && (
-              <div className="flex items-center justify-center py-6">
-                <Loader2 className="w-6 h-6 animate-spin mr-2" /> Enviando...
-              </div>
-            )}
-
-            {deleteStep === 'otp' && (
-              <div>
-                <p className="text-sm text-muted-foreground">Ingresa el código OTP enviado a tu correo para confirmar la eliminación.</p>
-                <div className="mt-3">
-                  <Input value={otpCode} onChange={(e) => setOtpCode(e.target.value)} placeholder="Código OTP" />
-                </div>
-                <div className="flex justify-end gap-2 mt-4">
-                  <Button variant="outline" onClick={() => { setShowDeleteModal(false); setDeleteStep('confirm'); }}>Cancelar</Button>
-                  <Button onClick={handleVerifyOtpAndDelete}>Verificar, Descargar y Eliminar</Button>
-                </div>
+              <div className="flex items-center justify-center h-full">
+                Seleccione un documento para ver
               </div>
             )}
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* Seguridad reforzada para operaciones sensibles (Descarga de pagarés y Eliminación) */}
+      <SecurityChallengeDialog
+        isOpen={showSecurityChallenge}
+        onOpenChange={setShowSecurityChallenge}
+        onSuccess={handleSecuritySuccess}
+        title={
+          pendingActionType === "delete"
+            ? "Confirmar Eliminación"
+            : pendingActionType === "view"
+              ? "Confirmar Visualización"
+              : "Verificación de Seguridad"
+        }
+        description={
+          pendingActionType === "delete"
+            ? `Estás a punto de eliminar "${pendingActionTarget?.file_name}". Confirma tu identidad.`
+            : pendingActionType === "view"
+              ? `Para visualizar el PDF de "${pendingActionTarget?.file_name}" se requiere una validación adicional.`
+              : `Para descargar el documento "${pendingActionTarget?.file_name}" se requiere una validación adicional.`
+        }
+        actionLabel={
+          pendingActionType === "delete"
+            ? "Eliminar Documento"
+            : pendingActionType === "view"
+              ? "Ver Documento"
+              : "Confirmar y Descargar"
+        }
+      />
     </div>
   );
 };

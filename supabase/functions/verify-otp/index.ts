@@ -60,6 +60,33 @@ serve(async (req) => {
       return new Response(JSON.stringify({ error: "Missing code" }), { status: 400, headers: corsHeaders });
     }
 
+    // ============================================================
+    // Req 14: Rate limiting — máximo 10 intentos de verificación por usuario en 15 min
+    // ============================================================
+    const rlKey = `otp_verify:${userData.user.id}`;
+    const windowStart = new Date(Date.now() - 15 * 60 * 1000).toISOString();
+    const { count: rlCount } = await supabaseAdmin
+      .from('rate_limit_attempts')
+      .select('id', { count: 'exact', head: true })
+      .eq('key', rlKey)
+      .gte('created_at', windowStart);
+
+    if ((rlCount || 0) >= 10) {
+      console.warn('[verify-otp] rate limit exceeded', { userId: userData.user.id, count: rlCount });
+      return new Response(
+        JSON.stringify({ error: 'Demasiados intentos fallidos. Espera 15 minutos.', valid: false }),
+        { status: 429, headers: { ...corsHeaders, 'Retry-After': '900' } }
+      );
+    }
+
+    // Registrar el intento de verificación
+    await supabaseAdmin.from('rate_limit_attempts').insert({
+      key: rlKey,
+      tipo: 'otp_verify',
+      usuario_id: userData.user.id,
+      ip_address: req.headers.get('x-forwarded-for') || req.headers.get('cf-connecting-ip') || null
+    });
+
     // find matching OTP
     console.log('[verify-otp] querying otp_codes', { code, documentId });
     const { data: rows, error } = await supabaseAdmin

@@ -23,3 +23,6 @@ dist-ssr
 *.sln
 *.sw?
 .env
+
+# Archivo con credenciales de prueba — no subir al repositorio
+supabase/migrations/sds

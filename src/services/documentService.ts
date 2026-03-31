@@ -52,6 +52,7 @@ export interface DocumentData {
   resultado_ultima_gestion?: string;
   proxima_accion?: string;
   fecha_proxima_accion?: string;
+  hash_sha256?: string;
 }
 
 export interface CustomAttributeValue {
@@ -60,10 +61,26 @@ export interface CustomAttributeValue {
   valor: string;
 }
 
+/** Calcula el hash SHA-256 de un File y lo retorna como cadena hex. */
+async function computeSha256(file: File): Promise<string> {
+  try {
+    const buffer = await file.arrayBuffer();
+    const hashBuffer = await crypto.subtle.digest('SHA-256', buffer);
+    const hashArray = Array.from(new Uint8Array(hashBuffer));
+    return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+  } catch (e) {
+    console.error('[documentService] SHA-256 error', e);
+    return '';
+  }
+}
+
 export const documentService = {
-  async uploadFile(file: File, workspaceId: string, userId: string): Promise<string> {
+  async uploadFile(file: File, workspaceId: string, userId: string): Promise<{ path: string; hash: string }> {
     const fileExt = file.name.split('.').pop();
     const fileName = `${workspaceId}/${userId}/${Date.now()}.${fileExt}`;
+
+    // Calcular hash SHA-256 antes de subir (Req 5)
+    const hash = await computeSha256(file);
 
     const { data, error } = await supabase.storage
       .from('documents')
@@ -81,13 +98,13 @@ export const documentService = {
         entidad_tipo: 'documento',
         entidad_nombre: file.name,
         entidad_id: null,
-        metadata: { path: data.path }
+        metadata: { path: data.path, hash_sha256: hash }
       } as any);
     } catch (e) {
       console.error('[documentService] logActivity upload error', e);
     }
 
-    return data.path;
+    return { path: data.path, hash };
   },
 
   async createDocument(documentData: DocumentData): Promise<any> {

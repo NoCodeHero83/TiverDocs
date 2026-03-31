@@ -12,8 +12,10 @@ interface ActivityRow {
   accion: string;
   entidad_tipo: string | null;
   entidad_nombre: string | null;
+  entidad_id: string | null;
   fecha: string;
   usuario_nombre?: string;
+  metadata?: Record<string, any> | null;
 }
 
 export const SuperAdminLogs = () => {
@@ -23,6 +25,9 @@ export const SuperAdminLogs = () => {
   const [debouncedSearch, setDebouncedSearch] = useState("");
   const [entidadTypeFilter, setEntidadTypeFilter] = useState<string | 'all'>('all');
   const [usuarioFilter, setUsuarioFilter] = useState<string | 'all'>('all');
+  /** Req 13: filtro por ID de documento para trazabilidad completa */
+  const [entidadIdFilter, setEntidadIdFilter] = useState<string>('');
+  const [debouncedEntidadId, setDebouncedEntidadId] = useState<string>('');
   const [entidadTypes, setEntidadTypes] = useState<string[]>([]);
   const [usuarios, setUsuarios] = useState<Array<{ id: string; full_name: string }>>([]);
   const [page, setPage] = useState(1);
@@ -32,19 +37,19 @@ export const SuperAdminLogs = () => {
   const fetchLogs = async () => {
     setLoading(true);
     try {
-      // build filters
-      const filters: Array<(qb: any) => any> = [];
       const qEntidad = entidadTypeFilter && entidadTypeFilter !== 'all';
       const qUsuario = usuarioFilter && usuarioFilter !== 'all';
-
-      // build search/or condition for server-side filtering
       const hasSearch = !!debouncedSearch?.trim();
       const searchTerm = (debouncedSearch || "").trim();
+      // Req 13: filtro por entidad_id (ID de documento)
+      const hasEntidadId = !!debouncedEntidadId?.trim();
+      const entidadIdTerm = (debouncedEntidadId || "").trim();
 
       // get total count with filters + search
       let countQuery: any = supabase.from('actividad_reciente').select('id', { count: 'exact', head: true });
       if (qEntidad) countQuery = countQuery.eq('entidad_tipo', entidadTypeFilter);
       if (qUsuario) countQuery = countQuery.eq('usuario_id', usuarioFilter);
+      if (hasEntidadId) countQuery = countQuery.ilike('entidad_id::text', `%${entidadIdTerm}%`);
       if (hasSearch) {
         const escaped = searchTerm.replace(/%/g, '\\%');
         const orStr = `accion.ilike.%${escaped}%,entidad_nombre.ilike.%${escaped}%`;
@@ -59,12 +64,13 @@ export const SuperAdminLogs = () => {
 
       let dataQuery: any = supabase
         .from('actividad_reciente')
-        .select(`id, accion, entidad_tipo, entidad_nombre, fecha, usuario_id`)
+        .select(`id, accion, entidad_tipo, entidad_nombre, entidad_id, fecha, usuario_id, metadata`)
         .order('fecha', { ascending: false })
         .range(start, end);
 
       if (qEntidad) dataQuery = dataQuery.eq('entidad_tipo', entidadTypeFilter);
       if (qUsuario) dataQuery = dataQuery.eq('usuario_id', usuarioFilter);
+      if (hasEntidadId) dataQuery = dataQuery.ilike('entidad_id::text', `%${entidadIdTerm}%`);
       if (hasSearch) {
         const escaped = searchTerm.replace(/%/g, '\\%');
         const orStr = `accion.ilike.%${escaped}%,entidad_nombre.ilike.%${escaped}%`;
@@ -120,12 +126,17 @@ export const SuperAdminLogs = () => {
 
   useEffect(() => {
     fetchLogs();
-  }, [page, pageSize, entidadTypeFilter, usuarioFilter, debouncedSearch]);
+  }, [page, pageSize, entidadTypeFilter, usuarioFilter, debouncedSearch, debouncedEntidadId]);
 
   useEffect(() => {
-    // when filters change, reset to first page and refetch (handled by deps)
     setPage(1);
-  }, [entidadTypeFilter, usuarioFilter]);
+  }, [entidadTypeFilter, usuarioFilter, debouncedEntidadId]);
+
+  // Debounce para el filtro de entidad_id
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedEntidadId(entidadIdFilter), 500);
+    return () => clearTimeout(t);
+  }, [entidadIdFilter]);
 
   // debounce search input to avoid spamming server
   useEffect(() => {
@@ -147,35 +158,47 @@ export const SuperAdminLogs = () => {
   return (
     <div className="space-y-6">
       <Card className="bg-gradient-card shadow-card">
-        <CardHeader className="flex items-center justify-between">
-          <CardTitle>Registros del Sistema</CardTitle>
-          <div className="flex items-center gap-3">
-            <div className="w-64">
-              <Input placeholder="Buscar texto..." value={search} onChange={e => setSearch(e.target.value)} />
-            </div>
+        <CardHeader>
+          <div className="flex items-center justify-between flex-wrap gap-3">
+            <CardTitle>Registros del Sistema</CardTitle>
+            <div className="flex items-center gap-3 flex-wrap">
+              <div className="w-52">
+                <Input placeholder="Buscar texto..." value={search} onChange={e => setSearch(e.target.value)} />
+              </div>
 
-            <div>
-              <Select value={entidadTypeFilter} onValueChange={(v) => setEntidadTypeFilter(v as any)}>
-                <SelectTrigger className="w-44">
-                  <SelectValue placeholder="Tipo de entidad" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Todos</SelectItem>
-                  {entidadTypes.map(t => (<SelectItem key={t} value={t}>{t}</SelectItem>))}
-                </SelectContent>
-              </Select>
-            </div>
+              {/* Req 13: filtro por ID de documento para trazabilidad */}
+              <div className="w-52">
+                <Input
+                  placeholder="ID de documento (trazabilidad)"
+                  value={entidadIdFilter}
+                  onChange={e => setEntidadIdFilter(e.target.value)}
+                  title="Buscar todos los eventos de un documento específico (Req 13)"
+                />
+              </div>
 
-            <div>
-              <Select value={usuarioFilter} onValueChange={(v) => setUsuarioFilter(v as any)}>
-                <SelectTrigger className="w-56">
-                  <SelectValue placeholder="Usuario" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Todos</SelectItem>
-                  {usuarios.map(u => (<SelectItem key={u.id} value={u.id}>{u.full_name}</SelectItem>))}
-                </SelectContent>
-              </Select>
+              <div>
+                <Select value={entidadTypeFilter} onValueChange={(v) => setEntidadTypeFilter(v as any)}>
+                  <SelectTrigger className="w-44">
+                    <SelectValue placeholder="Tipo de entidad" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Todos</SelectItem>
+                    {entidadTypes.map(t => (<SelectItem key={t} value={t}>{t}</SelectItem>))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div>
+                <Select value={usuarioFilter} onValueChange={(v) => setUsuarioFilter(v as any)}>
+                  <SelectTrigger className="w-56">
+                    <SelectValue placeholder="Usuario" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Todos</SelectItem>
+                    {usuarios.map(u => (<SelectItem key={u.id} value={u.id}>{u.full_name}</SelectItem>))}
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
           </div>
         </CardHeader>
@@ -191,17 +214,35 @@ export const SuperAdminLogs = () => {
                     <TableHead>Acción</TableHead>
                     <TableHead>Entidad</TableHead>
                     <TableHead>Nombre</TableHead>
+                    <TableHead className="max-w-[140px]">ID Entidad</TableHead>
                     <TableHead>Usuario</TableHead>
+                    <TableHead>User-Agent</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {rows.map(row => (
                     <TableRow key={row.id}>
-                      <TableCell>{formatDistanceToNow(new Date(row.fecha), { addSuffix: true, locale: es })}</TableCell>
+                      <TableCell className="whitespace-nowrap">{formatDistanceToNow(new Date(row.fecha), { addSuffix: true, locale: es })}</TableCell>
                       <TableCell className="max-w-sm truncate">{row.accion}</TableCell>
                       <TableCell>{row.entidad_tipo || '-'}</TableCell>
                       <TableCell className="max-w-xs truncate">{row.entidad_nombre || '-'}</TableCell>
+                      <TableCell className="max-w-[140px]">
+                        {row.entidad_id ? (
+                          <span
+                            className="font-mono text-xs cursor-pointer hover:text-primary"
+                            title={row.entidad_id}
+                            onClick={() => setEntidadIdFilter(row.entidad_id!)}
+                          >
+                            {row.entidad_id.substring(0, 8)}…
+                          </span>
+                        ) : '-'}
+                      </TableCell>
                       <TableCell>{row.usuario_nombre}</TableCell>
+                      <TableCell className="max-w-[160px] truncate text-xs text-muted-foreground" title={(row.metadata as any)?._audit?.user_agent || ''}>
+                        {(row.metadata as any)?._audit?.user_agent
+                          ? (row.metadata as any)._audit.user_agent.split(' ').slice(0, 3).join(' ')
+                          : '-'}
+                      </TableCell>
                     </TableRow>
                   ))}
                 </TableBody>

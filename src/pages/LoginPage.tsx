@@ -1,22 +1,34 @@
+import React, { useState, useEffect } from "react";
 import { LoginForm } from "@/components/auth/LoginForm";
+import { MfaVerificationForm } from "@/components/auth/MfaVerificationForm";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
+import { supabase } from "@/lib/supabase";
 
 export const LoginPage = () => {
   const { toast } = useToast();
-  const { signIn } = useAuth();
+  const { signIn, mfaPending, pendingEmail, cancelMfa } = useAuth();
 
   const handleLogin = async (email: string, password: string) => {
     try {
-      console.log("LoginPage - Intentando login con:", email);
       await signIn(email, password);
-      console.log("LoginPage - Login exitoso");
-      toast({
-        title: "Bienvenido",
-        description: "Has iniciado sesión correctamente",
-      });
+      // Si signIn tiene éxito, mfaPending pasará a true
+      // y se mostrará el formulario MFA
+      if (!mfaPending) {
+        toast({
+          title: "Código enviado",
+          description: "Revisa tu correo para el código de verificación.",
+        });
+      }
     } catch (error: any) {
-      console.error("LoginPage - Error de autenticación:", error);
+      // Si el usuario tiene TOTP, el error es TOTP_CONFIGURED
+      // En este caso, no mostrar error porque LoginForm lo maneja
+      if (error.message === 'TOTP_CONFIGURED') {
+        console.log('[LoginPage] Usuario con TOTP - flujo manejado por LoginForm');
+        return;
+      }
+      
+      console.error("[LoginPage] Error de autenticación:", error);
       toast({
         title: "Error de autenticación",
         description:
@@ -34,89 +46,50 @@ export const LoginPage = () => {
     });
   };
 
+  // Para la verificación del OTP necesitamos el userId del usuario pendiente
+  const [pendingUserId, setPendingUserId] = useState<string>('');
+
+  useEffect(() => {
+    if (mfaPending && pendingEmail) {
+      // El userId se obtiene a través de la tabla usuarios por email
+      supabase
+        .from('usuarios')
+        .select('id')
+        .eq('email', pendingEmail)
+        .maybeSingle()
+        .then(({ data }) => {
+          if (data?.id) setPendingUserId(data.id);
+        });
+    }
+  }, [mfaPending, pendingEmail]);
+
+  if (mfaPending && pendingEmail) {
+    return (
+      <div className="min-h-screen flex">
+        <div className="hidden lg:flex lg:flex-1 relative bg-cover bg-center bg-no-repeat bg-primary/10" />
+        <div className="flex-1 bg-gradient-background flex items-center justify-center p-4">
+          <div className="w-full max-w-md">
+            <div className="text-center mb-8">
+              <h1 className="text-3xl font-bold bg-gradient-primary bg-clip-text text-transparent">
+                TiverDocs
+              </h1>
+              <p className="text-muted-foreground mt-2">
+                Verificación en dos pasos
+              </p>
+            </div>
+            <MfaVerificationForm
+              email={pendingEmail}
+              userId={pendingUserId}
+              onCancel={cancelMfa}
+            />
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <LoginForm onLogin={handleLogin} onForgotPassword={handleForgotPassword} />
   );
 };
 
-// import { useState } from "react";
-// import { LoginForm } from "@/components/auth/LoginForm";
-// import { useToast } from "@/hooks/use-toast";
-
-// interface LoginPageProps {
-//   onLogin: (userData: any) => void;
-// }
-
-// export const LoginPage = ({ onLogin }: LoginPageProps) => {
-//   const { toast } = useToast();
-
-//   const handleLogin = async (email: string, password: string) => {
-//     // Simulación de autenticación
-//     console.log("Intento de login:", { email, password });
-    
-//     // Datos simulados de usuarios
-//     const mockUsers = {
-//       "superadmin@pagaresecure.com": {
-//         name: "Super Administrador",
-//         email: "superadmin@pagaresecure.com",
-//         role: "superadmin" as const,
-//         workspace: "TiverDocs Platform",
-//         clientId: "superadmin"
-//       },
-//       "admin@empresaa.com": {
-//         name: "María González",
-//         email: "admin@empresaa.com",
-//         role: "admin" as const,
-//         workspace: "Empresa A - Financiera",
-//         clientId: "client_a"
-//       },
-//       "viewer@empresaa.com": {
-//         name: "Carlos Rodríguez",
-//         email: "viewer@empresaa.com", 
-//         role: "viewer" as const,
-//         workspace: "Empresa A - Financiera",
-//         clientId: "client_a"
-//       },
-//       "admin@empresab.com": {
-//         name: "Ana Pérez",
-//         email: "admin@empresab.com",
-//         role: "admin" as const,
-//         workspace: "Empresa B - Cooperativa",
-//         clientId: "client_b"
-//       }
-//     };
-
-//     const user = mockUsers[email as keyof typeof mockUsers];
-    
-//     const validPassword = (user?.role === "superadmin" && password === "super123") || 
-//                           (user?.role !== "superadmin" && password === "demo123");
-    
-//     if (user && validPassword) {
-//       toast({
-//         title: "Bienvenido",
-//         description: `Acceso autorizado para ${user.workspace}`,
-//       });
-//       onLogin(user);
-//     } else {
-//       toast({
-//         title: "Error de autenticación",
-//         description: "Credenciales incorrectas. Usa demo123 para usuarios normales o super123 para superadmin.",
-//         variant: "destructive"
-//       });
-//     }
-//   };
-
-//   const handleForgotPassword = () => {
-//     toast({
-//       title: "Recuperación de contraseña",
-//       description: "Se ha enviado un enlace de recuperación a tu correo electrónico.",
-//     });
-//   };
-
-//   return (
-//     <LoginForm 
-//       onLogin={handleLogin}
-//       onForgotPassword={handleForgotPassword}
-//     />
-//   );
-// };

@@ -110,7 +110,7 @@ export const useDocuments = (workspaceId?: string, page: number = 1, pageSize: n
 
   const uploadMutation = useMutation({
     mutationFn: async ({ file, workspaceId, userId, documentData, customAttributes }: UploadDocumentParams) => {
-      const filePath = await documentService.uploadFile(file, workspaceId, userId);
+      const { path: filePath, hash: hashSha256 } = await documentService.uploadFile(file, workspaceId, userId);
 
       const fullDocumentData: DocumentData = {
         workspace_id: workspaceId,
@@ -120,6 +120,7 @@ export const useDocuments = (workspaceId?: string, page: number = 1, pageSize: n
         file_size: file.size,
         tipo_documento: documentData.tipo_documento || '',
         estado: documentData.estado || 'Activo',
+        hash_sha256: hashSha256 || undefined,
         ...documentData,
       };
 

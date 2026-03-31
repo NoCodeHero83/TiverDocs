@@ -6,18 +6,18 @@ import { SuperAdminPage } from "./SuperAdminPage";
 const Index = () => {
   const { usuario, loading } = useAuth();
 
+  console.log(`[Index] Render - Loading: ${loading}, Usuario: ${usuario?.email || 'null'}`);
+
   if (loading) {
     return (
       <div className="min-h-screen bg-gradient-background flex items-center justify-center">
         <div className="text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
-          <p className="text-muted-foreground">Cargando...</p>
+          <p className="text-muted-foreground font-medium">Sincronizando sesión segura...</p>
         </div>
       </div>
     );
   }
-
-  console.log("Index - Usuario actual:", usuario?.email, "Rol:", usuario?.rol);
 
   if (usuario) {
     console.log("Redirigiendo basado en rol:", usuario.rol);
