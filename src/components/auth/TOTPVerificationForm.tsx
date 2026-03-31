@@ -2,7 +2,13 @@ import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { ShieldCheck, Loader2, AlertTriangle } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
@@ -54,22 +60,22 @@ export const TOTPVerificationForm = ({
     setError(null);
 
     try {
-      console.log('[TOTPVerificationForm] Verificando código TOTP...');
+      console.log("[TOTPVerificationForm] Verificando código TOTP...");
       const { session, user } = await verifyTOTPLogin(factorId, code);
-      
-      console.log('[TOTPVerificationForm] Código verificado correctamente');
+
+      console.log("[TOTPVerificationForm] Código verificado correctamente");
       toast({
         title: "Acceso concedido",
         description: "Verificación de 2 factores exitosa.",
       });
-      
+
       onVerificationComplete(session, user);
     } catch (err: any) {
       const errorMsg = err.message || "Código inválido o expirado";
       setError(errorMsg);
       console.error("[TOTPVerificationForm] Error en verificación:", err);
-      
-      setAttempts(prev => {
+
+      setAttempts((prev) => {
         const newAttempts = prev + 1;
         if (newAttempts >= 3) {
           setLockoutTimer(30);
@@ -159,7 +165,9 @@ export const TOTPVerificationForm = ({
           <Alert className="bg-amber-50 border-amber-200">
             <AlertTriangle className="w-4 h-4 text-amber-600" />
             <AlertDescription className="text-amber-900 text-sm">
-              {attempts} {attempts === 1 ? "intento fallido" : "intentos fallidos"}. A los 3 intentos se bloqueará temporalmente.
+              {attempts}{" "}
+              {attempts === 1 ? "intento fallido" : "intentos fallidos"}. A los
+              3 intentos se bloqueará temporalmente.
             </AlertDescription>
           </Alert>
         )}
@@ -191,7 +199,8 @@ export const TOTPVerificationForm = ({
         </div>
 
         <p className="text-xs text-muted-foreground text-center">
-          ¿Problemas? Asegúrate de que tu autenticador esté funcionando correctamente.
+          ¿Problemas? Asegúrate de que tu autenticador esté funcionando
+          correctamente.
         </p>
       </CardContent>
     </Card>
