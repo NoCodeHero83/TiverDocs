@@ -22,10 +22,12 @@ import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/lib/supabase";
 import { getTOTPFactors, hasMFAEnabled } from "@/services/totpService";
 import { useAuth } from "@/contexts/AuthContext";
-import { AltchaWidget } from "./AltchaWidget";
+//import { AltchaWidget } from "./AltchaWidget";
+import Hcaptcha from "@hcaptcha/react-hcaptcha";
 
 /** Req 15: Configurar VITE_ALTCHA_CHALLENGE_URL en .env si se requiere PoW backend */
-const ALTCHA_CHALLENGE_URL = import.meta.env.VITE_ALTCHA_CHALLENGE_URL || undefined;
+const ALTCHA_CHALLENGE_URL =
+  import.meta.env.VITE_ALTCHA_CHALLENGE_URL || undefined;
 
 interface LoginFormProps {
   onLogin: (email: string, password: string) => void;
@@ -46,7 +48,12 @@ export const LoginForm = ({ onLogin, onForgotPassword }: LoginFormProps) => {
   const [isLoading, setIsLoading] = useState(false);
   const [currentView, setCurrentView] = useState<ViewState>("login");
   const { toast } = useToast();
-  const [captchaVerified, setCaptchaVerified] = useState(false);
+
+  //const [captchaVerified, setCaptchaVerified] = useState(false);
+
+  const [captchaToken, setCaptchaToken] = useState<string | null>(null);
+  const captcha = useRef();
+
   const { setMfaPending } = useAuth();
 
   // TOTP states
@@ -77,10 +84,11 @@ export const LoginForm = ({ onLogin, onForgotPassword }: LoginFormProps) => {
     if (lockoutTimer > 0) return;
 
     // Req 15: Verificar CAPTCHA con ALTCHA
-    if (!captchaVerified) {
+    if (!captchaToken) {
       toast({
         title: "Verificación requerida",
-        description: "Por favor completa la verificación del CAPTCHA para continuar.",
+        description:
+          "Por favor completa la verificación del CAPTCHA para continuar.",
         variant: "destructive",
       });
       return;
@@ -90,18 +98,21 @@ export const LoginForm = ({ onLogin, onForgotPassword }: LoginFormProps) => {
     // Bloquear AuthContext para que no nos redirija al dashboard antes de verificar TOTP
     setMfaPending(true);
     try {
-      console.log("[LoginForm] Iniciando login para:", email);
+      console.log("[LoginForm]");
 
       // Paso 1: Login normal (email + password)
       const { data, error } = await supabase.auth.signInWithPassword({
         email,
         password,
+        options: {
+          captchaToken,
+        },
       });
 
       if (error) {
-        console.error("[LoginForm] Error en credenciales:", error);
-        
-        setFailedAttempts(prev => {
+        console.error("[LoginFormE]");
+
+        setFailedAttempts((prev) => {
           const newAttempts = prev + 1;
           if (newAttempts >= 3) {
             setLockoutTimer(30);
@@ -130,10 +141,7 @@ export const LoginForm = ({ onLogin, onForgotPassword }: LoginFormProps) => {
         throw new Error("No se recibió sesión del servidor");
       }
 
-      console.log(
-        "[LoginForm] Kredenciales validadas - usuario:",
-        data.user.email,
-      );
+      console.log("[LoginForm] Kredenciales validadas");
 
       // Guardar sesión temporal (hasta verificar TOTP)
       tempSessionRef.current = data.session;
@@ -144,12 +152,15 @@ export const LoginForm = ({ onLogin, onForgotPassword }: LoginFormProps) => {
         const totpFactors = await getTOTPFactors();
 
         if (!totpFactors || totpFactors.length === 0) {
-          console.warn("[LoginForm] Usuario NO tiene TOTP configurado - Redirigiendo a enrolamiento");
+          console.warn(
+            "[LoginForm] Usuario NO tiene TOTP configurado - Redirigiendo a enrolamiento",
+          );
           toast({
             title: "Configuración requerida",
-            description: "Para proteger tu cuenta, debes configurar la autenticación de 2 factores (TOTP).",
+            description:
+              "Para proteger tu cuenta, debes configurar la autenticación de 2 factores (TOTP).",
           });
-          
+
           // No cerramos sesión porque la necesitamos para enrolar el factor
           setCurrentView("totp-enroll");
           setIsLoading(false);
@@ -159,22 +170,22 @@ export const LoginForm = ({ onLogin, onForgotPassword }: LoginFormProps) => {
         // Buscar factor TOTP verificado
         const verifiedFactor = totpFactors.find((f) => f.status === "verified");
         if (!verifiedFactor) {
-          console.warn("[LoginForm] Usuario tiene TOTP pero no está verificado - Redirigiendo a enrolamiento");
+          console.warn(
+            "[LoginForm] Usuario tiene TOTP pero no está verificado - Redirigiendo a enrolamiento",
+          );
           toast({
             title: "Configuración pendiente",
-            description: "Tu autenticación de 2 factores no está completada. Por favor, realiza el proceso de configuración.",
+            description:
+              "Tu autenticación de 2 factores no está completada. Por favor, realiza el proceso de configuración.",
           });
-          
+
           // Redirigir a enrolamiento para que el usuario pueda completar el proceso
           setCurrentView("totp-enroll");
           setIsLoading(false);
           return;
         }
 
-        console.log(
-          "[LoginForm] Usuario tiene TOTP verificado - Factor ID:",
-          verifiedFactor.id,
-        );
+        console.log("[LoginForm] Usuario tiene TOTP verificado");
 
         // Mostrar formulario de verificación TOTP
         setTotpFactorId(verifiedFactor.id);
@@ -430,7 +441,8 @@ export const LoginForm = ({ onLogin, onForgotPassword }: LoginFormProps) => {
                       <Alert variant="destructive">
                         <AlertTriangle className="w-4 h-4" />
                         <AlertDescription>
-                          Demasiados intentos. Intenta de nuevo en {lockoutTimer}s.
+                          Demasiados intentos. Intenta de nuevo en{" "}
+                          {lockoutTimer}s.
                         </AlertDescription>
                       </Alert>
                     )}
@@ -439,23 +451,30 @@ export const LoginForm = ({ onLogin, onForgotPassword }: LoginFormProps) => {
                       <Alert className="bg-amber-50 border-amber-200">
                         <AlertTriangle className="w-4 h-4 text-amber-600" />
                         <AlertDescription className="text-amber-900 text-sm">
-                          {failedAttempts} {failedAttempts === 1 ? "intento fallido" : "intentos fallidos"}. A los 3 intentos se bloqueará temporalmente.
+                          {failedAttempts}{" "}
+                          {failedAttempts === 1
+                            ? "intento fallido"
+                            : "intentos fallidos"}
+                          . A los 3 intentos se bloqueará temporalmente.
                         </AlertDescription>
                       </Alert>
                     )}
 
                     {/* Req 15: Widget ALTCHA integrado */}
                     <div className="flex flex-col items-center gap-2">
-                      <AltchaWidget
-                        onVerify={(payload) => setCaptchaVerified(!!payload)}
-                        challengeUrl={ALTCHA_CHALLENGE_URL}
+                      <Hcaptcha
+                        ref={captcha}
+                        sitekey={import.meta.env.VITE_HCAPTCHA_SITE_KEY}
+                        onVerify={(token) => {
+                          setCaptchaToken(token);
+                        }}
                       />
                     </div>
 
                     <Button
                       type="submit"
                       className="w-full bg-gradient-primary hover:opacity-90 transition-opacity"
-                      disabled={isLoading || !captchaVerified || lockoutTimer > 0}
+                      disabled={isLoading || !captchaToken || lockoutTimer > 0}
                     >
                       {isLoading ? "Iniciando sesión..." : "Iniciar Sesión"}
                     </Button>

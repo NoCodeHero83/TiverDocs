@@ -1,7 +1,11 @@
-import { useState, useEffect } from 'react';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { documentService, DocumentData, CustomAttributeValue } from '@/services/documentService';
-import { useToast } from '@/hooks/use-toast';
+import { useState, useEffect } from "react";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import {
+  documentService,
+  DocumentData,
+  CustomAttributeValue,
+} from "@/services/documentService";
+import { useToast } from "@/hooks/use-toast";
 
 export interface DocumentWithAttributes {
   id: string;
@@ -11,7 +15,7 @@ export interface DocumentWithAttributes {
   file_path: string;
   file_size: number;
   tipo_documento: string;
-  estado: "Activo" | "Inactivo" | "Vencido";
+  estado: "Activo" | "Inactivo" | "Vencido" | "Archivado";
   created_at: string;
   updated_at: string;
   nombre_deudor?: string;
@@ -80,7 +84,11 @@ export interface UploadDocumentParams {
   }>;
 }
 
-export const useDocuments = (workspaceId?: string, page: number = 1, pageSize: number = 10) => {
+export const useDocuments = (
+  workspaceId?: string,
+  page: number = 1,
+  pageSize: number = 10,
+) => {
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
@@ -88,29 +96,39 @@ export const useDocuments = (workspaceId?: string, page: number = 1, pageSize: n
     data: pageResult,
     isLoading,
     error,
-    refetch
+    refetch,
   } = useQuery({
-    queryKey: ['documents', workspaceId, page, pageSize],
+    queryKey: ["documents", workspaceId, page, pageSize],
     queryFn: async () => {
-      if (!workspaceId) return { rows: [] as DocumentWithAttributes[], total: 0 };
+      if (!workspaceId)
+        return { rows: [] as DocumentWithAttributes[], total: 0 };
 
       const start = (page - 1) * pageSize;
       const end = start + pageSize - 1;
 
       const [{ data }, totalErrOrCount] = await Promise.all([
         documentService.getDocumentsByWorkspacePaged(workspaceId, start, end),
-        documentService.getDocumentsCount(workspaceId).catch(e => { throw e; })
+        documentService.getDocumentsCount(workspaceId).catch((e) => {
+          throw e;
+        }),
       ] as any);
 
-      const total = typeof totalErrOrCount === 'number' ? totalErrOrCount : 0;
+      const total = typeof totalErrOrCount === "number" ? totalErrOrCount : 0;
       return { rows: data || [], total };
     },
     enabled: !!workspaceId,
   });
 
   const uploadMutation = useMutation({
-    mutationFn: async ({ file, workspaceId, userId, documentData, customAttributes }: UploadDocumentParams) => {
-      const { path: filePath, hash: hashSha256 } = await documentService.uploadFile(file, workspaceId, userId);
+    mutationFn: async ({
+      file,
+      workspaceId,
+      userId,
+      documentData,
+      customAttributes,
+    }: UploadDocumentParams) => {
+      const { path: filePath, hash: hashSha256 } =
+        await documentService.uploadFile(file, workspaceId, userId);
 
       const fullDocumentData: DocumentData = {
         workspace_id: workspaceId,
@@ -118,16 +136,17 @@ export const useDocuments = (workspaceId?: string, page: number = 1, pageSize: n
         file_name: file.name,
         file_path: filePath,
         file_size: file.size,
-        tipo_documento: documentData.tipo_documento || '',
-        estado: documentData.estado || 'Activo',
+        tipo_documento: documentData.tipo_documento || "",
+        estado: documentData.estado || "Activo",
         hash_sha256: hashSha256 || undefined,
         ...documentData,
       };
 
-      const createdDocument = await documentService.createDocument(fullDocumentData);
+      const createdDocument =
+        await documentService.createDocument(fullDocumentData);
 
       if (customAttributes && customAttributes.length > 0) {
-        const attributesWithDocId = customAttributes.map(attr => ({
+        const attributesWithDocId = customAttributes.map((attr) => ({
           documento_id: createdDocument.id,
           atributo_id: attr.atributo_id,
           valor: attr.valor,
@@ -139,9 +158,11 @@ export const useDocuments = (workspaceId?: string, page: number = 1, pageSize: n
       return createdDocument;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['documents', workspaceId] });
+      queryClient.invalidateQueries({ queryKey: ["documents", workspaceId] });
       // Invalidate document stats so KPIs/cards refresh in the dashboard
-      queryClient.invalidateQueries({ queryKey: ['documentStats', workspaceId] });
+      queryClient.invalidateQueries({
+        queryKey: ["documentStats", workspaceId],
+      });
       toast({
         title: "Documento subido",
         description: "El documento se ha cargado correctamente.",
@@ -157,11 +178,18 @@ export const useDocuments = (workspaceId?: string, page: number = 1, pageSize: n
   });
 
   const updateMutation = useMutation({
-    mutationFn: ({ documentId, updates }: { documentId: string; updates: Partial<DocumentData> }) =>
-      documentService.updateDocument(documentId, updates),
+    mutationFn: ({
+      documentId,
+      updates,
+    }: {
+      documentId: string;
+      updates: Partial<DocumentData>;
+    }) => documentService.updateDocument(documentId, updates),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['documents', workspaceId] });
-      queryClient.invalidateQueries({ queryKey: ['documentStats', workspaceId] });
+      queryClient.invalidateQueries({ queryKey: ["documents", workspaceId] });
+      queryClient.invalidateQueries({
+        queryKey: ["documentStats", workspaceId],
+      });
       toast({
         title: "Documento actualizado",
         description: "Los cambios se han guardado correctamente.",
@@ -177,11 +205,18 @@ export const useDocuments = (workspaceId?: string, page: number = 1, pageSize: n
   });
 
   const deleteMutation = useMutation({
-    mutationFn: ({ documentId, filePath }: { documentId: string; filePath: string }) =>
-      documentService.deleteDocument(documentId, filePath),
+    mutationFn: ({
+      documentId,
+      filePath,
+    }: {
+      documentId: string;
+      filePath: string;
+    }) => documentService.deleteDocument(documentId, filePath),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['documents', workspaceId] });
-      queryClient.invalidateQueries({ queryKey: ['documentStats', workspaceId] });
+      queryClient.invalidateQueries({ queryKey: ["documents", workspaceId] });
+      queryClient.invalidateQueries({
+        queryKey: ["documentStats", workspaceId],
+      });
       toast({
         title: "Documento eliminado",
         description: "El documento se ha eliminado correctamente.",
@@ -196,17 +231,26 @@ export const useDocuments = (workspaceId?: string, page: number = 1, pageSize: n
     },
   });
 
-  const downloadDocument = async (filePath: string, fileName: string) => {
+  const downloadDocument = async (
+    filePath: string,
+    fileName: string,
+    documentId?: string,
+  ) => {
     try {
       const blob = await documentService.downloadDocument(filePath);
       const url = window.URL.createObjectURL(blob);
-      const a = document.createElement('a');
+      const a = document.createElement("a");
       a.href = url;
       a.download = fileName;
       document.body.appendChild(a);
       a.click();
       window.URL.revokeObjectURL(url);
       document.body.removeChild(a);
+
+      if (documentId) {
+        await documentService.archiveDocument(documentId);
+        queryClient.invalidateQueries({ queryKey: ["documents", workspaceId] });
+      }
 
       toast({
         title: "Descarga iniciada",
@@ -243,16 +287,19 @@ export const useDocumentStats = (workspaceId?: string) => {
   const {
     data: stats,
     isLoading,
-    error
+    error,
   } = useQuery({
-    queryKey: ['documentStats', workspaceId],
-    queryFn: () => workspaceId ? documentService.getDocumentStats(workspaceId) : Promise.resolve(null),
+    queryKey: ["documentStats", workspaceId],
+    queryFn: () =>
+      workspaceId
+        ? documentService.getDocumentStats(workspaceId)
+        : Promise.resolve(null),
     enabled: !!workspaceId,
   });
 
   return {
     stats,
     isLoading,
-    error
+    error,
   };
 };

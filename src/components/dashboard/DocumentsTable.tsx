@@ -306,9 +306,14 @@ export const DocumentsTable = ({
       return;
     }
 
+    console.log("ID", document.id);
     // Para otros tipos, descargar directamente
     try {
-      await downloadDocument(document.file_path, document.file_name);
+      await downloadDocument(
+        document.file_path,
+        document.file_name,
+        document.id,
+      );
     } catch (err: any) {
       console.error("[DocumentsTable] download error", err);
     }
@@ -337,6 +342,7 @@ export const DocumentsTable = ({
         await downloadDocument(
           pendingActionTarget.file_path,
           pendingActionTarget.file_name,
+          pendingActionTarget.id,
         );
       } else if (pendingActionType === "delete") {
         console.log(
@@ -651,6 +657,7 @@ export const DocumentsTable = ({
                               className="text-primary p-2"
                               aria-label="Ver PDF"
                               title="Ver PDF"
+                              disabled={doc.estado === "Archivado"}
                             >
                               <FileText className="w-4 h-4" />
                             </Button>
@@ -660,11 +667,12 @@ export const DocumentsTable = ({
                                 variant="outline"
                                 onClick={() => handleDownload(doc)}
                                 className="bg-background/50 hover:bg-primary hover:text-primary-foreground"
+                                disabled={doc.estado === "Archivado"}
                               >
                                 <Download className="w-4 h-4" />
                               </Button>
                             )}
-                            {userRole === "admin" && (
+                            {/* {userRole === "admin" && (
                               <Button
                                 size="sm"
                                 variant="outline"
@@ -674,7 +682,7 @@ export const DocumentsTable = ({
                               >
                                 <Trash2 className="w-4 h-4" />
                               </Button>
-                            )}
+                            )} */}
                           </div>
                         </TableCell>
                       </TableRow>

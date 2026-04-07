@@ -65,28 +65,32 @@ export interface CustomAttributeValue {
 async function computeSha256(file: File): Promise<string> {
   try {
     const buffer = await file.arrayBuffer();
-    const hashBuffer = await crypto.subtle.digest('SHA-256', buffer);
+    const hashBuffer = await crypto.subtle.digest("SHA-256", buffer);
     const hashArray = Array.from(new Uint8Array(hashBuffer));
-    return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+    return hashArray.map((b) => b.toString(16).padStart(2, "0")).join("");
   } catch (e) {
-    console.error('[documentService] SHA-256 error', e);
-    return '';
+    console.error("[documentService] SHA-256 error", e);
+    return "";
   }
 }
 
 export const documentService = {
-  async uploadFile(file: File, workspaceId: string, userId: string): Promise<{ path: string; hash: string }> {
-    const fileExt = file.name.split('.').pop();
+  async uploadFile(
+    file: File,
+    workspaceId: string,
+    userId: string,
+  ): Promise<{ path: string; hash: string }> {
+    const fileExt = file.name.split(".").pop();
     const fileName = `${workspaceId}/${userId}/${Date.now()}.${fileExt}`;
 
     // Calcular hash SHA-256 antes de subir (Req 5)
     const hash = await computeSha256(file);
 
     const { data, error } = await supabase.storage
-      .from('documents')
+      .from("documents")
       .upload(fileName, file, {
-        cacheControl: '3600',
-        upsert: false
+        cacheControl: "3600",
+        upsert: false,
       });
 
     if (error) throw error;
@@ -94,14 +98,14 @@ export const documentService = {
     // Log file upload (storage)
     try {
       await logActivity({
-        accion: 'Documento subido',
-        entidad_tipo: 'documento',
+        accion: "Documento subido",
+        entidad_tipo: "documento",
         entidad_nombre: file.name,
         entidad_id: null,
-        metadata: { path: data.path, hash_sha256: hash }
+        metadata: { path: data.path, hash_sha256: hash },
       } as any);
     } catch (e) {
-      console.error('[documentService] logActivity upload error', e);
+      console.error("[documentService] logActivity upload error", e);
     }
 
     return { path: data.path, hash };
@@ -109,7 +113,7 @@ export const documentService = {
 
   async createDocument(documentData: DocumentData): Promise<any> {
     const { data, error } = await supabase
-      .from('documentos')
+      .from("documentos")
       .insert(documentData)
       .select()
       .single();
@@ -119,23 +123,25 @@ export const documentService = {
     // Log document creation
     try {
       await logActivity({
-        accion: 'Documento creado',
-        entidad_tipo: 'documento',
+        accion: "Documento creado",
+        entidad_tipo: "documento",
         entidad_nombre: documentData.file_name,
-        entidad_id: data.id
+        entidad_id: data.id,
       });
     } catch (e) {
-      console.error('[documentService] logActivity error', e);
+      console.error("[documentService] logActivity error", e);
     }
 
     return data;
   },
 
-  async saveCustomAttributes(attributes: CustomAttributeValue[]): Promise<void> {
+  async saveCustomAttributes(
+    attributes: CustomAttributeValue[],
+  ): Promise<void> {
     if (attributes.length === 0) return;
 
     const { error } = await supabase
-      .from('valores_atributos')
+      .from("valores_atributos")
       .insert(attributes);
 
     if (error) throw error;
@@ -143,8 +149,9 @@ export const documentService = {
 
   async getDocumentsByWorkspace(workspaceId: string): Promise<any[]> {
     const { data, error } = await supabase
-      .from('documentos')
-      .select(`
+      .from("documentos")
+      .select(
+        `
         *,
         valores_atributos (
           id,
@@ -156,20 +163,25 @@ export const documentService = {
             tipo
           )
         )
-      `)
-      .eq('workspace_id', workspaceId)
-      .order('created_at', { ascending: false });
+      `,
+      )
+      .eq("workspace_id", workspaceId)
+      .order("created_at", { ascending: false });
 
     if (error) throw error;
 
     return data || [];
   },
 
-  async getDocumentsByWorkspacePaged(workspaceId: string, start: number, end: number): Promise<{ data: any[]; error: any }>
-  {
+  async getDocumentsByWorkspacePaged(
+    workspaceId: string,
+    start: number,
+    end: number,
+  ): Promise<{ data: any[]; error: any }> {
     const { data, error } = await supabase
-      .from('documentos')
-      .select(`
+      .from("documentos")
+      .select(
+        `
         *,
         valores_atributos (
           id,
@@ -181,9 +193,10 @@ export const documentService = {
             tipo
           )
         )
-      `)
-      .eq('workspace_id', workspaceId)
-      .order('created_at', { ascending: false })
+      `,
+      )
+      .eq("workspace_id", workspaceId)
+      .order("created_at", { ascending: false })
       .range(start, end);
 
     return { data: data || [], error };
@@ -191,9 +204,9 @@ export const documentService = {
 
   async getDocumentsCount(workspaceId: string): Promise<number> {
     const { count, error } = await supabase
-      .from('documentos')
-      .select('id', { count: 'exact', head: true })
-      .eq('workspace_id', workspaceId);
+      .from("documentos")
+      .select("id", { count: "exact", head: true })
+      .eq("workspace_id", workspaceId);
 
     if (error) throw error;
     return count || 0;
@@ -204,9 +217,9 @@ export const documentService = {
     let friendlyName = filePath;
     try {
       const { data: docData, error: docErr } = await supabase
-        .from('documentos')
-        .select('id, file_name')
-        .eq('file_path', filePath)
+        .from("documentos")
+        .select("id, file_name")
+        .eq("file_path", filePath)
         .limit(1)
         .single();
 
@@ -218,7 +231,7 @@ export const documentService = {
     }
 
     const { data, error } = await supabase.storage
-      .from('documents')
+      .from("documents")
       .download(filePath);
 
     if (error) throw error;
@@ -226,34 +239,35 @@ export const documentService = {
     // Log download action using friendly name when available
     try {
       await logActivity({
-        accion: 'Documento descargado',
-        entidad_tipo: 'documento',
+        accion: "Documento descargado",
+        entidad_tipo: "documento",
         entidad_nombre: friendlyName,
-        entidad_id: null
+        entidad_id: null,
       } as any);
     } catch (e) {
-      console.error('[documentService] logActivity download error', e);
+      console.error("[documentService] logActivity download error", e);
     }
 
     return data;
   },
 
   async getDocumentUrl(filePath: string): Promise<string> {
-    const { data } = supabase.storage
-      .from('documents')
-      .getPublicUrl(filePath);
+    const { data } = supabase.storage.from("documents").getPublicUrl(filePath);
 
     return data.publicUrl;
   },
 
-  async updateDocument(documentId: string, updates: Partial<DocumentData>): Promise<any> {
+  async updateDocument(
+    documentId: string,
+    updates: Partial<DocumentData>,
+  ): Promise<any> {
     const { data, error } = await supabase
-      .from('documentos')
+      .from("documentos")
       .update({
         ...updates,
-        updated_at: new Date().toISOString()
+        updated_at: new Date().toISOString(),
       })
-      .eq('id', documentId)
+      .eq("id", documentId)
       .select()
       .single();
 
@@ -262,14 +276,17 @@ export const documentService = {
     // Log document modification
     try {
       await logActivity({
-        accion: 'Documento modificado',
-        entidad_tipo: 'documento',
-        entidad_nombre: (data && data.file_name) || (updates && (updates as any).file_name) || null,
+        accion: "Documento modificado",
+        entidad_tipo: "documento",
+        entidad_nombre:
+          (data && data.file_name) ||
+          (updates && (updates as any).file_name) ||
+          null,
         entidad_id: documentId,
-        metadata: updates || null
+        metadata: updates || null,
       } as any);
     } catch (e) {
-      console.error('[documentService] logActivity update error', e);
+      console.error("[documentService] logActivity update error", e);
     }
 
     return data;
@@ -280,9 +297,9 @@ export const documentService = {
     let friendlyName = filePath;
     try {
       const { data: docData, error: docErr } = await supabase
-        .from('documentos')
-        .select('file_name')
-        .eq('id', documentId)
+        .from("documentos")
+        .select("file_name")
+        .eq("id", documentId)
         .limit(1)
         .single();
 
@@ -294,36 +311,75 @@ export const documentService = {
     }
 
     const { error: storageError } = await supabase.storage
-      .from('documents')
+      .from("documents")
       .remove([filePath]);
 
     if (storageError) throw storageError;
 
     const { error: dbError } = await supabase
-      .from('documentos')
+      .from("documentos")
       .delete()
-      .eq('id', documentId);
+      .eq("id", documentId);
 
     if (dbError) throw dbError;
 
     // Log document deletion using friendly name when available
     try {
       await logActivity({
-        accion: 'Documento eliminado',
-        entidad_tipo: 'documento',
+        accion: "Documento eliminado",
+        entidad_tipo: "documento",
         entidad_nombre: friendlyName,
-        entidad_id: documentId
+        entidad_id: documentId,
       } as any);
     } catch (e) {
-      console.error('[documentService] logActivity delete error', e);
+      console.error("[documentService] logActivity delete error", e);
+    }
+  },
+
+  async archiveDocument(documentId?: string): Promise<void> {
+    if (!documentId) return;
+
+    // Resolve document name for logging
+    let friendlyName = documentId;
+    try {
+      const { data: docData } = await supabase
+        .from("documentos")
+        .select("file_name")
+        .eq("id", documentId)
+        .single();
+
+      if (docData && docData.file_name) {
+        friendlyName = docData.file_name;
+      }
+    } catch (e) {
+      // ignore
+    }
+
+    const { error } = await supabase
+      .from("documentos")
+      .update({ estado: "Archivado" })
+      .eq("id", documentId);
+
+    if (error) throw error;
+
+    // Log the archive
+    try {
+      await logActivity({
+        accion: "Documento archivado",
+        entidad_tipo: "documento",
+        entidad_nombre: friendlyName,
+        entidad_id: documentId,
+      } as any);
+    } catch (e) {
+      console.error("[documentService] logActivity archive error", e);
     }
   },
 
   async getDocumentStats(workspaceId: string): Promise<any> {
     const { data, error } = await supabase
-      .from('documentos')
-      .select('estado, valor_titulo, fecha_vencimiento')
-      .eq('workspace_id', workspaceId);
+      .from("documentos")
+      .select("estado, valor_titulo, fecha_vencimiento")
+      .eq("workspace_id", workspaceId);
 
     if (error) throw error;
 
@@ -341,7 +397,7 @@ export const documentService = {
 
     for (const d of data) {
       totalDocuments += 1;
-      totalValue += (d.valor_titulo || 0);
+      totalValue += d.valor_titulo || 0;
 
       // Determine expiration-based status
       let isExpired = false;
@@ -363,11 +419,11 @@ export const documentService = {
       }
 
       // Count active/inactive considering expiration
-      if (!isExpired && d.estado === 'Activo') {
+      if (!isExpired && d.estado === "Activo") {
         activeDocuments += 1;
       }
 
-      if (d.estado === 'Inactivo') {
+      if (d.estado === "Inactivo") {
         inactiveDocuments += 1;
       }
     }
@@ -380,5 +436,5 @@ export const documentService = {
       expiringDocuments,
       totalValue,
     };
-  }
+  },
 };
