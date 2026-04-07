@@ -23,7 +23,7 @@ import { supabase } from "@/lib/supabase";
 import { getTOTPFactors, hasMFAEnabled } from "@/services/totpService";
 import { useAuth } from "@/contexts/AuthContext";
 //import { AltchaWidget } from "./AltchaWidget";
-import Hcaptcha from "@hcaptcha/react-hcaptcha";
+import HCaptcha from "@hcaptcha/react-hcaptcha";
 
 /** Req 15: Configurar VITE_ALTCHA_CHALLENGE_URL en .env si se requiere PoW backend */
 const ALTCHA_CHALLENGE_URL =
@@ -52,7 +52,7 @@ export const LoginForm = ({ onLogin, onForgotPassword }: LoginFormProps) => {
   //const [captchaVerified, setCaptchaVerified] = useState(false);
 
   const [captchaToken, setCaptchaToken] = useState<string | null>(null);
-  const captcha = useRef();
+  const captcha = useRef<HCaptcha>(null);
 
   const { setMfaPending } = useAuth();
 
@@ -460,13 +460,20 @@ export const LoginForm = ({ onLogin, onForgotPassword }: LoginFormProps) => {
                       </Alert>
                     )}
 
-                    {/* Req 15: Widget ALTCHA integrado */}
-                    <div className="flex flex-col items-center gap-2">
-                      <Hcaptcha
+                    {/* Req 15: Widget hCaptcha integrado */}
+                    <div className="flex flex-col items-center gap-2 mt-4 min-h-[78px]">
+                      <HCaptcha
                         ref={captcha}
-                        sitekey={import.meta.env.VITE_HCAPTCHA_SITE_KEY}
+                        sitekey={
+                          import.meta.env.VITE_HCAPTCHA_SITE_KEY ||
+                          "10000000-ffff-ffff-ffff-000000000001"
+                        }
                         onVerify={(token) => {
                           setCaptchaToken(token);
+                        }}
+                        onExpire={() => setCaptchaToken(null)}
+                        onError={(err) => {
+                          console.error("[LoginForm] hCaptcha Error:", err);
                         }}
                       />
                     </div>
