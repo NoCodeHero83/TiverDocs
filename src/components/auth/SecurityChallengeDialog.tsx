@@ -51,7 +51,7 @@ export const SecurityChallengeDialog = ({
   const [error, setError] = useState<string | null>(null);
 
   const [captchaToken, setCaptchaToken] = useState<string | null>(null);
-  const captcha = useRef();
+  const captcha = useRef<HCaptcha>(null);
 
   const email = usuario?.email || lastUserEmail;
 
@@ -210,9 +210,16 @@ export const SecurityChallengeDialog = ({
             <div className="flex flex-col items-center gap-2 mt-2">
               <HCaptcha
                 ref={captcha}
-                sitekey={import.meta.env.VITE_HCAPTCHA_SITE_KEY}
+                sitekey={
+                  import.meta.env.VITE_HCAPTCHA_SITE_KEY ||
+                  "10000000-ffff-ffff-ffff-000000000001"
+                }
                 onVerify={(token) => {
                   setCaptchaToken(token);
+                }}
+                onExpire={() => setCaptchaToken(null)}
+                onError={(err) => {
+                  console.error("[SecurityChallenge] hCaptcha Error:", err);
                 }}
               />
             </div>
