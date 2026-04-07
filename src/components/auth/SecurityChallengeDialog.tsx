@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import {
   Dialog,
   DialogContent,
@@ -14,6 +14,7 @@ import { supabase } from "@/lib/supabase";
 import { getTOTPFactors, verifyTOTPLogin } from "@/services/totpService";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
+import HCaptcha from "@hcaptcha/react-hcaptcha";
 
 interface SecurityChallengeDialogProps {
   isOpen: boolean;
@@ -49,6 +50,9 @@ export const SecurityChallengeDialog = ({
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const [captchaToken, setCaptchaToken] = useState<string | null>(null);
+  const captcha = useRef();
+
   const email = usuario?.email || lastUserEmail;
 
   // Reset state on open
@@ -69,15 +73,19 @@ export const SecurityChallengeDialog = ({
     setError(null);
     try {
       console.log("[SecurityChallenge] Validando contraseña para:", email);
-      
-      // ACTIVAR mfaPending ANTES del sign-in para evitar que AuthContext 
+
+      // ACTIVAR mfaPending ANTES del sign-in para evitar que AuthContext
       // nos redirija al login al detectar la sesión parcial (AAL1)
       setMfaPending(true);
 
-      const { data, error: signInError } = await supabase.auth.signInWithPassword({
-        email,
-        password,
-      });
+      const { data, error: signInError } =
+        await supabase.auth.signInWithPassword({
+          email,
+          password,
+          options: {
+            captchaToken,
+          },
+        });
 
       if (signInError) {
         setMfaPending(false); // Resetear si el login falla
@@ -87,14 +95,20 @@ export const SecurityChallengeDialog = ({
       // Un éxito en signInWithPassword nos da una sesión (aal1)
       const session = data.session;
       const factors = session?.user?.factors || [];
-      const verifiedFactor = factors.find(f => f.status === "verified" && f.factor_type === "totp");
+      const verifiedFactor = factors.find(
+        (f) => f.status === "verified" && f.factor_type === "totp",
+      );
 
       if (verifiedFactor) {
-        console.log("[SecurityChallenge] TOTP requerido, manteniendo modo pendiente");
+        console.log(
+          "[SecurityChallenge] TOTP requerido, manteniendo modo pendiente",
+        );
         setTotpFactorId(verifiedFactor.id);
         setView("totp");
       } else {
-        console.log("[SecurityChallenge] Contraseña válida, no hay TOTP configurado");
+        console.log(
+          "[SecurityChallenge] Contraseña válida, no hay TOTP configurado",
+        );
         setMfaPending(false); // Liberar si no hay MFA
         onSuccess();
         onOpenChange(false);
@@ -116,11 +130,13 @@ export const SecurityChallengeDialog = ({
     try {
       console.log("[SecurityChallenge] Verificando código TOTP...");
       const result = await verifyTOTPLogin(totpFactorId, totpCode);
-      
+
       const session = (result as any)?.session;
       if (session) {
-        console.log("[SecurityChallenge] TOTP validado exitosamente. Actualizando cliente...");
-        
+        console.log(
+          "[SecurityChallenge] TOTP validado exitosamente. Actualizando cliente...",
+        );
+
         // Sincronizar inmediatamente el cliente de Supabase con la nueva sesión AAL2
         // para asegurar que las llamadas posteriores (onSuccess) tengan los permisos correctos.
         await supabase.auth.setSession({
@@ -147,7 +163,7 @@ export const SecurityChallengeDialog = ({
 
   return (
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
-      <DialogContent 
+      <DialogContent
         className="max-w-sm"
         onInteractOutside={(e) => e.preventDefault()}
         onEscapeKeyDown={(e) => e.preventDefault()}
@@ -155,12 +171,18 @@ export const SecurityChallengeDialog = ({
         <DialogHeader>
           <div className="flex justify-center mb-2">
             <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center">
-              {view === "password" ? <Lock className="w-6 h-6 text-primary" /> : <ShieldCheck className="w-6 h-6 text-primary" />}
+              {view === "password" ? (
+                <Lock className="w-6 h-6 text-primary" />
+              ) : (
+                <ShieldCheck className="w-6 h-6 text-primary" />
+              )}
             </div>
           </div>
           <DialogTitle className="text-center">{title}</DialogTitle>
           <DialogDescription className="text-center">
-            {view === "password" ? description : "Ingresa el código de 6 dígitos de tu autenticador"}
+            {view === "password"
+              ? description
+              : "Ingresa el código de 6 dígitos de tu autenticador"}
           </DialogDescription>
         </DialogHeader>
 
@@ -184,11 +206,34 @@ export const SecurityChallengeDialog = ({
                 autoFocus
               />
             </div>
-            <Button type="submit" className="w-full bg-gradient-primary" disabled={isLoading || !password}>
-              {isLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : actionLabel}
+
+            <div className="flex flex-col items-center gap-2 mt-2">
+              <HCaptcha
+                ref={captcha}
+                sitekey={import.meta.env.VITE_HCAPTCHA_SITE_KEY}
+                onVerify={(token) => {
+                  setCaptchaToken(token);
+                }}
+              />
+            </div>
+
+            <Button
+              type="submit"
+              className="w-full bg-gradient-primary"
+              disabled={isLoading || !password || !captchaToken}
+            >
+              {isLoading ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : (
+                actionLabel
+              )}
             </Button>
             {showLogout && (
-              <Button variant="ghost" className="w-full text-muted-foreground text-xs" onClick={onLogout}>
+              <Button
+                variant="ghost"
+                className="w-full text-muted-foreground text-xs"
+                onClick={onLogout}
+              >
                 Cerrar sesión
               </Button>
             )}
@@ -208,15 +253,32 @@ export const SecurityChallengeDialog = ({
                 autoFocus
               />
             </div>
-            <Button type="submit" className="w-full bg-gradient-primary" disabled={isLoading || totpCode.length !== 6}>
-              {isLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : "Verificar"}
+            <Button
+              type="submit"
+              className="w-full bg-gradient-primary"
+              disabled={isLoading || totpCode.length !== 6}
+            >
+              {isLoading ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : (
+                "Verificar"
+              )}
             </Button>
             <div className="flex flex-col gap-1">
-              <Button variant="ghost" onClick={() => setView("password")} className="w-full text-xs" disabled={isLoading}>
+              <Button
+                variant="ghost"
+                onClick={() => setView("password")}
+                className="w-full text-xs"
+                disabled={isLoading}
+              >
                 Volver a contraseña
               </Button>
               {showLogout && (
-                <Button variant="ghost" className="w-full text-muted-foreground text-[10px]" onClick={onLogout}>
+                <Button
+                  variant="ghost"
+                  className="w-full text-muted-foreground text-[10px]"
+                  onClick={onLogout}
+                >
                   Cerrar sesión
                 </Button>
               )}
