@@ -100,6 +100,7 @@ export const DocumentsTable = ({
   const [deleteTarget, setDeleteTarget] =
     useState<DocumentWithAttributes | null>(null);
   const [showSecurityChallenge, setShowSecurityChallenge] = useState(false);
+  const [showDownloadWarning, setShowDownloadWarning] = useState(false);
   const [pendingActionTarget, setPendingActionTarget] =
     useState<DocumentWithAttributes | null>(null);
   const [pendingActionType, setPendingActionType] = useState<
@@ -298,11 +299,11 @@ export const DocumentsTable = ({
   });
 
   const handleDownload = async (document: DocumentWithAttributes) => {
-    // Si es un Pagaré, requerir seguridad extra
+    // Si es un Pagaré, mostrar advertencia antes de continuar
     if (document.tipo_documento === "Pagaré") {
       setPendingActionTarget(document);
       setPendingActionType("download");
-      setShowSecurityChallenge(true);
+      setShowDownloadWarning(true);
       return;
     }
 
@@ -975,6 +976,41 @@ export const DocumentsTable = ({
                 Seleccione un documento para ver
               </div>
             )}
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Advertencia antes de descargar un pagaré */}
+      <Dialog open={showDownloadWarning} onOpenChange={setShowDownloadWarning}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-amber-600">
+              <AlertTriangle className="w-5 h-5" />
+              Advertencia
+            </DialogTitle>
+            <DialogDescription className="text-base pt-2">
+              Una vez descargado el documento, este por motivos de seguridad sera eliminado de nuestro sistema.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex justify-end gap-3 pt-4">
+            <Button
+              variant="outline"
+              onClick={() => {
+                setShowDownloadWarning(false);
+                setPendingActionTarget(null);
+                setPendingActionType(null);
+              }}
+            >
+              Salir
+            </Button>
+            <Button
+              onClick={() => {
+                setShowDownloadWarning(false);
+                setShowSecurityChallenge(true);
+              }}
+            >
+              Continuar
+            </Button>
           </div>
         </DialogContent>
       </Dialog>
