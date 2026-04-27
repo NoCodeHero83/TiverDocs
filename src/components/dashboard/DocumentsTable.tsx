@@ -873,6 +873,14 @@ export const DocumentsTable = ({
                       )}
                     </p>
                   </div>
+                  <div>
+                    <label className="text-sm font-medium text-muted-foreground">
+                      Subido por
+                    </label>
+                    <p className="font-medium">
+                      {selectedDocument.uploader?.full_name ?? "ProtecData"}
+                    </p>
+                  </div>
                 </div>
               </div>
 
