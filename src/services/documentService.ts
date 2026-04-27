@@ -153,6 +153,7 @@ export const documentService = {
       .select(
         `
         *,
+        uploader:uploaded_by(full_name),
         valores_atributos (
           id,
           atributo_id,
@@ -183,6 +184,7 @@ export const documentService = {
       .select(
         `
         *,
+        uploader:uploaded_by(full_name),
         valores_atributos (
           id,
           atributo_id,

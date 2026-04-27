@@ -10,7 +10,8 @@ import { useToast } from "@/hooks/use-toast";
 export interface DocumentWithAttributes {
   id: string;
   workspace_id: string;
-  uploaded_by: string;
+  uploaded_by: string | null;
+  uploader?: { full_name: string } | null;
   file_name: string;
   file_path: string;
   file_size: number;
